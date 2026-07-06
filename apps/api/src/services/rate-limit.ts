@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import { prisma } from "@onepara/db";
+import { getRedis } from "./redis.js";
 import { error } from "./response.js";
 
 export async function checkRateLimit(
@@ -8,23 +8,28 @@ export async function checkRateLimit(
   windowSec: number,
   reply: Parameters<typeof error>[0],
 ): Promise<boolean> {
-  const now = Math.floor(Date.now() / 1000);
-  const since = now - windowSec;
+  const redisKey = `ratelimit:${key}`;
 
-  await prisma.rateLimit.deleteMany({ where: { createdAt: { lt: since } } });
+  try {
+    const redis = getRedis();
+    const count = await redis.incr(redisKey);
 
-  const count = await prisma.rateLimit.count({
-    where: { key, createdAt: { gte: since } },
-  });
+    if (count === 1) {
+      await redis.expire(redisKey, windowSec);
+    }
 
-  if (count >= max) {
-    reply.header("Retry-After", String(windowSec));
-    error(reply, "Çok fazla istek. Lütfen bekleyin.", 429);
-    return false;
+    if (count > max) {
+      const ttl = await redis.ttl(redisKey);
+      reply.header("Retry-After", String(ttl > 0 ? ttl : windowSec));
+      error(reply, "Çok fazla istek. Lütfen bekleyin.", 429);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("[rate-limit] Redis error:", err);
+    return true;
   }
-
-  await prisma.rateLimit.create({ data: { key, createdAt: now } });
-  return true;
 }
 
 export function getClientIp(request: FastifyRequest): string {

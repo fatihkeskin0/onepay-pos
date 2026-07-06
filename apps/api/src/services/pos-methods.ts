@@ -3,8 +3,21 @@ import { prisma } from "@onepara/db";
 import type { PspProviderName } from "@onepara/shared";
 import { getProvider } from "./psp/index.js";
 import type { PspProvider } from "./psp/types.js";
+import { getOrSet, invalidatePrefix } from "./cache.js";
 
 const PROVIDERS: PspProviderName[] = ["mock", "paytr", "stripe", "sumup"];
+const POS_CACHE_TTL_SEC = 30;
+
+async function fetchEnabledPosMethods() {
+  return prisma.posMethod.findMany({
+    where: { enabled: true },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+  });
+}
+
+export async function invalidatePosMethodsCache(): Promise<void> {
+  await invalidatePrefix("pos:");
+}
 
 export function isProviderConfigured(provider: string): boolean {
   switch (provider) {
@@ -30,10 +43,7 @@ export async function listPosMethodsWithMeta() {
 }
 
 export async function getEnabledPosMethodsForSite(siteMinDeposit: number) {
-  const items = await prisma.posMethod.findMany({
-    where: { enabled: true },
-    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-  });
+  const items = await getOrSet(`pos:enabled`, POS_CACHE_TTL_SEC, fetchEnabledPosMethods);
 
   return items
     .filter((m) => isProviderConfigured(m.provider))
@@ -50,10 +60,7 @@ export async function resolvePosProvider(
   requestedProvider: string | null | undefined,
   siteMinDeposit: number,
 ): Promise<{ method: Awaited<ReturnType<typeof prisma.posMethod.findFirst>>; provider: PspProvider } | null> {
-  const enabled = await prisma.posMethod.findMany({
-    where: { enabled: true },
-    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-  });
+  const enabled = await getOrSet(`pos:enabled`, POS_CACHE_TTL_SEC, fetchEnabledPosMethods);
 
   const configured = enabled.filter((m) => isProviderConfigured(m.provider));
 

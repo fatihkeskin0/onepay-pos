@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -51,7 +51,7 @@ enum PspSettlementStatus {
 }
 
 model Site {
-  id                    Int               @id @default(autoincrement()) @db.UnsignedInt
+  id                    Int               @id @default(autoincrement())
   name                  String            @db.VarChar(100)
   apiKey                String            @unique @map("api_key") @db.VarChar(64)
   minDeposit            Decimal           @default(100) @map("min_deposit") @db.Decimal(10, 2)
@@ -76,12 +76,12 @@ model Site {
 }
 
 model Cashier {
-  id                     Int              @id @default(autoincrement()) @db.UnsignedInt
+  id                     Int              @id @default(autoincrement())
   username               String           @unique @db.VarChar(50)
   passwordHash           String           @map("password_hash") @db.VarChar(255)
   role                   CashierRole      @default(kasiyer)
   commissionRate         Decimal          @default(5) @map("commission_rate") @db.Decimal(5, 2)
-  siteId                 Int?             @map("site_id") @db.UnsignedInt
+  siteId                 Int?             @map("site_id")
   isActive               Boolean          @default(true) @map("is_active")
   totpSecret             String?          @map("totp_secret") @db.VarChar(64)
   totpEnabled            Boolean          @default(false) @map("totp_enabled")
@@ -110,25 +110,25 @@ model Cashier {
 }
 
 model CashierSubUser {
-  id           Int      @id @default(autoincrement())
-  cashierId    Int      @map("cashier_id") @db.UnsignedInt
-  username     String   @unique @db.VarChar(60)
-  passwordHash String   @map("password_hash") @db.VarChar(255)
-  displayName  String?  @map("display_name") @db.VarChar(100)
-  isActive     Boolean  @default(true) @map("is_active")
+  id           Int       @id @default(autoincrement())
+  cashierId    Int       @map("cashier_id")
+  username     String    @unique @db.VarChar(60)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  displayName  String?   @map("display_name") @db.VarChar(100)
+  isActive     Boolean   @default(true) @map("is_active")
   lastLogin    DateTime? @map("last_login")
   lastSeenAt   DateTime? @map("last_seen_at")
-  createdAt    DateTime @default(now()) @map("created_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
   permissions  Json?
-  cashier      Cashier  @relation(fields: [cashierId], references: [id])
+  cashier      Cashier   @relation(fields: [cashierId], references: [id])
 
   @@index([cashierId])
   @@map("cashier_sub_users")
 }
 
 model CashierSite {
-  cashierId Int @map("cashier_id") @db.UnsignedInt
-  siteId    Int @map("site_id") @db.UnsignedInt
+  cashierId Int     @map("cashier_id")
+  siteId    Int     @map("site_id")
   cashier   Cashier @relation(fields: [cashierId], references: [id])
   site      Site    @relation(fields: [siteId], references: [id])
 
@@ -137,15 +137,15 @@ model CashierSite {
 }
 
 model Deposit {
-  id                       Int           @id @default(autoincrement()) @db.UnsignedInt
+  id                       Int           @id @default(autoincrement())
   userId                   String        @map("user_id") @db.VarChar(100)
-  siteId                   Int?          @map("site_id") @db.UnsignedInt
+  siteId                   Int?          @map("site_id")
   amount                   Decimal       @db.Decimal(15, 2)
   method                   String        @default("card") @db.VarChar(30)
   reference                String        @unique @db.VarChar(20)
   token                    String        @unique @db.VarChar(64)
   status                   DepositStatus @default(pending)
-  cashierId                Int?          @map("cashier_id") @db.UnsignedInt
+  cashierId                Int?          @map("cashier_id")
   rejectReason             String?       @map("reject_reason") @db.VarChar(255)
   approvedAt               DateTime?     @map("approved_at")
   createdAt                DateTime      @default(now()) @map("created_at")
@@ -172,9 +172,9 @@ model Deposit {
 }
 
 model PaymentSession {
-  id           Int      @id @default(autoincrement()) @db.UnsignedInt
+  id           Int      @id @default(autoincrement())
   token        String   @unique @db.VarChar(40)
-  siteId       Int      @map("site_id") @db.UnsignedInt
+  siteId       Int      @map("site_id")
   userId       String   @map("user_id") @db.VarChar(100)
   amount       Decimal  @db.Decimal(15, 2)
   userName     String   @default("") @map("user_name") @db.VarChar(100)
@@ -191,7 +191,7 @@ model PaymentSession {
 }
 
 model Wallet {
-  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  id        Int      @id @default(autoincrement())
   userId    String   @unique @map("user_id") @db.VarChar(100)
   balance   Decimal  @default(0) @db.Decimal(15, 2)
   currency  String   @default("TRY") @db.Char(3)
@@ -201,7 +201,7 @@ model Wallet {
 }
 
 model Transaction {
-  id        BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  id        BigInt            @id @default(autoincrement())
   userId    String            @map("user_id") @db.VarChar(100)
   type      String            @db.VarChar(30)
   amount    Decimal           @db.Decimal(15, 2)
@@ -214,19 +214,19 @@ model Transaction {
 }
 
 model PspTransaction {
-  id          Int                  @id @default(autoincrement()) @db.UnsignedInt
-  depositId   Int                  @map("deposit_id") @db.UnsignedInt
-  provider    String               @db.VarChar(30)
-  providerRef String?              @map("provider_ref") @db.VarChar(128)
-  status      PspTransactionStatus @default(initiated)
-  amount      Decimal              @db.Decimal(15, 2)
-  threeDsStatus String?            @map("three_ds_status") @db.VarChar(30)
-  redirectUrl String?              @map("redirect_url") @db.VarChar(512)
-  rawRequest  Json?                @map("raw_request")
-  rawResponse Json?                @map("raw_response")
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-  deposit     Deposit              @relation(fields: [depositId], references: [id])
+  id            Int                  @id @default(autoincrement())
+  depositId     Int                  @map("deposit_id")
+  provider      String               @db.VarChar(30)
+  providerRef   String?              @map("provider_ref") @db.VarChar(128)
+  status        PspTransactionStatus @default(initiated)
+  amount        Decimal              @db.Decimal(15, 2)
+  threeDsStatus String?              @map("three_ds_status") @db.VarChar(30)
+  redirectUrl   String?              @map("redirect_url") @db.VarChar(512)
+  rawRequest    Json?                @map("raw_request")
+  rawResponse   Json?                @map("raw_response")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  deposit       Deposit              @relation(fields: [depositId], references: [id])
 
   @@index([depositId])
   @@index([providerRef])
@@ -234,7 +234,7 @@ model PspTransaction {
 }
 
 model PspSettlement {
-  id           Int                 @id @default(autoincrement()) @db.UnsignedInt
+  id           Int                 @id @default(autoincrement())
   provider     String              @db.VarChar(30)
   periodStart  DateTime            @map("period_start")
   periodEnd    DateTime            @map("period_end")
@@ -258,9 +258,9 @@ model Setting {
 }
 
 model Announcement {
-  id        Int              @id @default(autoincrement()) @db.UnsignedInt
+  id        Int              @id @default(autoincrement())
   title     String           @db.VarChar(200)
-  body      String           @db.MediumText
+  body      String           @db.Text
   type      AnnouncementType @default(info)
   isActive  Boolean          @default(true) @map("is_active")
   createdAt DateTime         @default(now()) @map("created_at")
@@ -270,8 +270,8 @@ model Announcement {
 }
 
 model ChatMessage {
-  id         Int        @id @default(autoincrement()) @db.UnsignedInt
-  cashierId  Int        @map("cashier_id") @db.UnsignedInt
+  id         Int        @id @default(autoincrement())
+  cashierId  Int        @map("cashier_id")
   sender     ChatSender
   senderName String     @default("") @map("sender_name") @db.VarChar(100)
   message    String     @db.Text
@@ -284,8 +284,8 @@ model ChatMessage {
 }
 
 model LoginLog {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  cashierId   Int       @map("cashier_id") @db.UnsignedInt
+  id          Int       @id @default(autoincrement())
+  cashierId   Int       @map("cashier_id")
   username    String    @db.VarChar(60)
   role        String    @db.VarChar(20)
   ip          String    @default("") @db.VarChar(45)
@@ -299,8 +299,8 @@ model LoginLog {
 }
 
 model AuditLog {
-  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  cashierId Int      @map("cashier_id") @db.UnsignedInt
+  id        BigInt   @id @default(autoincrement())
+  cashierId Int      @map("cashier_id")
   action    String   @db.VarChar(50)
   target    String?  @db.VarChar(100)
   note      String?  @db.Text
@@ -312,8 +312,8 @@ model AuditLog {
 }
 
 model DepositEditLog {
-  id        Int      @id @default(autoincrement()) @db.UnsignedInt
-  depositId Int      @map("deposit_id") @db.UnsignedInt
+  id        Int      @id @default(autoincrement())
+  depositId Int      @map("deposit_id")
   oldAmount Decimal  @map("old_amount") @db.Decimal(12, 2)
   newAmount Decimal  @map("new_amount") @db.Decimal(12, 2)
   editedBy  String   @map("edited_by") @db.VarChar(64)
@@ -322,15 +322,6 @@ model DepositEditLog {
 
   @@index([depositId])
   @@map("deposit_edit_logs")
-}
-
-model RateLimit {
-  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  key       String @db.VarChar(120)
-  createdAt Int    @map("created_at") @db.UnsignedInt
-
-  @@index([key, createdAt])
-  @@map("rate_limit")
 }
 
 model PosMethod {

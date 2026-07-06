@@ -1,27 +1,37 @@
 services:
-  mysql:
-    image: mariadb:10.11
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: onepara_card
-      MYSQL_USER: onepara
-      MYSQL_PASSWORD: onepara
+      POSTGRES_DB: onepara_card
+      POSTGRES_USER: onepara
+      POSTGRES_PASSWORD: onepara
     ports:
-      - "3315:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD-SHELL", "pg_isready -U onepara -d onepara_card"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   api:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile.api
     environment:
-      DATABASE_URL: mysql://onepara:onepara@mysql:3306/onepara_card
+      DATABASE_URL: postgresql://onepara:onepara@postgres:5432/onepara_card
+      REDIS_URL: redis://redis:6379
       APP_SECRET: dev-secret-change-in-production
       APP_ENV: development
       WEB_PORT: 3105
@@ -34,7 +44,9 @@ services:
     ports:
       - "4105:4105"
     depends_on:
-      mysql:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   web:
@@ -49,4 +61,5 @@ services:
       - api
 
 volumes:
-  mysql_data:
+  pg_data:
+  redis_data:

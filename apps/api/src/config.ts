@@ -10,7 +10,10 @@ const webPort = Number(process.env.WEB_PORT ?? 3105);
 
 export const config = {
   db: {
-    url: process.env.DATABASE_URL ?? "mysql://onepara:onepara@localhost:3315/onepara_card",
+    url: process.env.DATABASE_URL ?? "postgresql://onepara:onepara@localhost:5432/onepara_card",
+  },
+  redis: {
+    url: process.env.REDIS_URL ?? "redis://localhost:6379",
   },
   app: {
     secret: process.env.APP_SECRET ?? "dev-secret-change-in-production",

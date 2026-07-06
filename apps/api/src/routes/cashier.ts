@@ -13,7 +13,7 @@ import { ok, error } from "../services/response.js";
 import { byIp } from "../services/rate-limit.js";
 import { makePartialToken, verifyPartialToken, verifyTotp, generateSecret, getQrDataUrl } from "../services/totp.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
-import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
+import { depositApproved, depositRejected, depositUrl, getSiteCallback, getSetting } from "../services/callback.js";
 
 export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   app.post("/login", async (request, reply) => {
@@ -306,7 +306,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
     ok(reply, {
       new_deposits: newDeps,
-      chat_enabled: (await prisma.setting.findUnique({ where: { key: "chat_enabled" } }))?.value !== "0",
+      chat_enabled: (await getSetting("chat_enabled")) !== "0",
       server_time: Math.floor(Date.now() / 1000),
     });
   });

@@ -5,8 +5,8 @@ import { requireAuth, hashPassword, generateApiKey } from "../services/auth.js";
 import { ok, error } from "../services/response.js";
 import { config } from "../config.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
-import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
-import { listPosMethodsWithMeta } from "../services/pos-methods.js";
+import { depositApproved, depositRejected, depositUrl, getSiteCallback, invalidateSettingCache } from "../services/callback.js";
+import { invalidatePosMethodsCache, listPosMethodsWithMeta } from "../services/pos-methods.js";
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/dashboard", async (request, reply) => {
@@ -388,6 +388,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as Record<string, string>;
     for (const [key, value] of Object.entries(body)) {
       await prisma.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+      await invalidateSettingCache(key);
     }
     ok(reply, {});
   });
@@ -655,6 +656,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
+    await invalidatePosMethodsCache();
     ok(reply, { method });
   });
 
@@ -671,6 +673,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       where: { provider },
       data: { enabled: !method.enabled },
     });
+    await invalidatePosMethodsCache();
     ok(reply, { method: updated });
   });
 

@@ -1,10 +1,23 @@
 import { createHmac } from "node:crypto";
 import { prisma } from "@onepara/db";
 import { config } from "../config.js";
+import { getOrSet, invalidate } from "./cache.js";
+
+const SETTING_CACHE_TTL_SEC = 30;
+
+export async function invalidateSettingCache(key?: string): Promise<void> {
+  if (key) {
+    await invalidate(`setting:${key}`);
+    return;
+  }
+  await invalidate("setting:all");
+}
 
 export async function getSetting(key: string): Promise<string | null> {
-  const row = await prisma.setting.findUnique({ where: { key } });
-  return row?.value ?? null;
+  return getOrSet(`setting:${key}`, SETTING_CACHE_TTL_SEC, async () => {
+    const row = await prisma.setting.findUnique({ where: { key } });
+    return row?.value ?? null;
+  });
 }
 
 export async function fireCallback(

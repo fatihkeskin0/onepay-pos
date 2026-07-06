@@ -6,7 +6,7 @@ Next.js + Node.js (Fastify) credit card deposit platform.
 
 - `apps/web` — Next.js 15 panel + payment pages + static API docs (`/docs`)
 - `apps/api` — Fastify REST API
-- `packages/db` — Prisma + MySQL
+- `packages/db` — Prisma + PostgreSQL
 - `packages/shared` — shared types and nav config
 
 ## Quick Start (local)
@@ -26,7 +26,8 @@ Use `pnpm dev:clean` if the web app shows stale chunk / Internal Server Error (c
 - Web: http://localhost:3105
 - API: http://localhost:4105
 - API Docs: http://localhost:3105/docs
-- MySQL (local): localhost:3315
+- PostgreSQL (local): localhost:5432
+- Redis (local): localhost:6379
 - Login: `admin` / `admin123` or `agent` / `agent123`
 - Site API key (seed): `dev_site_api_key_00000000000000000000000000000001`
 
@@ -88,7 +89,7 @@ cd ops/docker
 docker compose -f compose.dev.yml up --build
 ```
 
-Then run migrations/seed inside api container or locally against `mysql://onepara:onepara@localhost:3315/onepara_card`.
+Then run migrations/seed inside api container or locally against `postgresql://onepara:onepara@localhost:5432/onepara_card`.
 
 ## Production (Coolify)
 
