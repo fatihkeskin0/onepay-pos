@@ -16,7 +16,7 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 ## Quick setup
 
 1. Create a new **Docker Compose** project in Coolify.
-2. Point to this repo; compose file: `ops/docker/compose.prod.yml`.
+2. Point to this repo; compose file: `docker-compose.yaml` (default) or `ops/docker/compose.prod.yaml`.
 3. Copy `.env.production.example` → Coolify **Environment Variables**.
 4. Set required values:
    - `APP_BASE_URL` — web domain (`https://pay.yourdomain.com`)
@@ -104,5 +104,5 @@ Use `pnpm dev:clean` if Next.js cache issues occur on Windows.
 For Docker-based local stack with Postgres + Redis:
 
 ```powershell
-docker compose -f ops/docker/compose.dev.yml up -d postgres redis
+docker compose -f ops/docker/compose.dev.yaml up -d postgres redis
 ```

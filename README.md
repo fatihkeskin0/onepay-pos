@@ -86,7 +86,7 @@ Configure active providers, min/max amounts, and default method in **Admin → P
 
 ```powershell
 cd ops/docker
-docker compose -f compose.dev.yml up --build
+docker compose -f compose.dev.yaml up --build
 ```
 
 Then run migrations/seed inside api container or locally against `postgresql://onepara:onepara@localhost:5432/onepara_card`.
@@ -95,7 +95,7 @@ Then run migrations/seed inside api container or locally against `postgresql://o
 
 See [ops/coolify/README.md](ops/coolify/README.md).
 
-- Compose file: `ops/docker/compose.prod.yml`
+- Compose file: `docker-compose.yaml` (or `ops/docker/compose.prod.yaml`)
 - Env template: `.env.production.example`
 - Deploy: Coolify → Docker Compose → map web (3105) + api (4105) domains
 

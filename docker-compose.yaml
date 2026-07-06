@@ -1,0 +1,3 @@
+# Coolify default entrypoint — production stack
+include:
+  - ops/docker/compose.prod.yaml

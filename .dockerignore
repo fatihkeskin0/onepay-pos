@@ -35,4 +35,4 @@ agent-transcripts/
 terminals/
 
 # Docker dev only
-ops/docker/compose.dev.yml
+ops/docker/compose.dev.yaml
