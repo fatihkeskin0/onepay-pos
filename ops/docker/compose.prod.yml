@@ -1,0 +1,81 @@
+# Production stack for Coolify / Docker Compose
+# Set env vars in Coolify UI or via .env.production (never commit secrets)
+
+services:
+  mysql:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-onepara_card}
+      MYSQL_USER: ${MYSQL_USER:-onepara}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql://${MYSQL_USER:-onepara}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-onepara_card}}
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET}
+      APP_ENV: production
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      APP_PAYMENT_URL: ${APP_PAYMENT_URL:-${APP_BASE_URL}}
+      API_PORT: 4105
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
+      API_HOST: 0.0.0.0
+      CORS_ORIGIN: ${CORS_ORIGIN:-${APP_BASE_URL}}
+      BC_SECRET: ${BC_SECRET:-}
+      BC_API_URL: ${BC_API_URL:-}
+      BC_PARTNER_ID: ${BC_PARTNER_ID:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      PSP_DEFAULT_PROVIDER: ${PSP_DEFAULT_PROVIDER:-paytr}
+      PAYTR_MERCHANT_ID: ${PAYTR_MERCHANT_ID:-}
+      PAYTR_MERCHANT_KEY: ${PAYTR_MERCHANT_KEY:-}
+      PAYTR_MERCHANT_SALT: ${PAYTR_MERCHANT_SALT:-}
+      PAYTR_TEST_MODE: ${PAYTR_TEST_MODE:-0}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      SUMUP_API_KEY: ${SUMUP_API_KEY:-}
+      SUMUP_MERCHANT_CODE: ${SUMUP_MERCHANT_CODE:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4105/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: http://api:4105
+    restart: unless-stopped
+    environment:
+      PORT: 3105
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3105/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+volumes:
+  mysql_data:

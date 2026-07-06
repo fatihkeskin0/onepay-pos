@@ -1,0 +1,29 @@
+node_modules
+.next
+dist
+.turbo
+out
+
+# Secrets
+.env
+.env.local
+.env.production
+!.env.example
+!.env.production.example
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Legacy PHP stack (separate repo)
+onepay/
+
+# IDE / local tooling
+.cursor/
+.vscode/
+.idea/
+*.swp
+
+# Local artifacts
+messages.html

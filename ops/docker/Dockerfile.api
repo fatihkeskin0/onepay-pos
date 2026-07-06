@@ -1,0 +1,35 @@
+FROM node:20-alpine AS base
+RUN apk add --no-cache openssl
+RUN corepack enable
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm db:generate
+
+FROM deps AS builder
+COPY apps/web/package.json ./apps/web/package.json
+RUN pnpm --filter @onepara/shared build
+RUN pnpm --filter @onepara/db build
+RUN pnpm --filter @onepara/api build
+
+FROM base AS runner
+ENV NODE_ENV=production
+RUN apk add --no-cache wget
+WORKDIR /app
+
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/turbo.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/api ./apps/api
+COPY ops/docker/entrypoint.api.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 4105
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:4105/health || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

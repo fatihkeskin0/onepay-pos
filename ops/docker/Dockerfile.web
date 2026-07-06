@@ -1,0 +1,38 @@
+FROM node:20-alpine AS base
+RUN corepack enable
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/web ./apps/web
+RUN pnpm install --frozen-lockfile || pnpm install
+
+FROM deps AS builder
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web ./apps/web
+COPY packages ./packages
+
+ARG NEXT_PUBLIC_API_URL=http://api:4105
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV DOCKER_BUILD=1
+
+RUN pnpm --filter @onepara/shared build
+RUN pnpm --filter @onepara/web build
+
+FROM base AS runner
+ENV NODE_ENV=production
+ENV PORT=3105
+ENV HOSTNAME=0.0.0.0
+RUN apk add --no-cache wget
+WORKDIR /app
+
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+EXPOSE 3105
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3105/api/health || exit 1
+
+CMD ["node", "apps/web/server.js"]

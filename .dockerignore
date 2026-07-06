@@ -1,0 +1,38 @@
+# Legacy PHP (not part of this stack)
+onepay/
+
+# Dev / IDE
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+
+# Dependencies & build output
+node_modules/
+.next/
+dist/
+.turbo/
+out/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Local junk
+messages.html
+agent-transcripts/
+terminals/
+
+# Docker dev only
+ops/docker/compose.dev.yml

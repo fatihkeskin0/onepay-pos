@@ -1,0 +1,15 @@
+.popover {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  z-index: var(--z-popover);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-3);
+}
+
+.popover--start { left: 0; }
+.popover--end { right: 0; }
+
+.popover-anchor { position: relative; display: inline-block; width: 100%; }

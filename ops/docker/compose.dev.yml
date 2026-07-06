@@ -1,0 +1,52 @@
+services:
+  mysql:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: onepara_card
+      MYSQL_USER: onepara
+      MYSQL_PASSWORD: onepara
+    ports:
+      - "3315:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.api
+    environment:
+      DATABASE_URL: mysql://onepara:onepara@mysql:3306/onepara_card
+      APP_SECRET: dev-secret-change-in-production
+      APP_ENV: development
+      WEB_PORT: 3105
+      APP_BASE_URL: http://localhost:3105
+      APP_PAYMENT_URL: http://localhost:3105
+      API_PORT: 4105
+      API_PUBLIC_URL: http://localhost:4105
+      CORS_ORIGIN: http://localhost:3105
+      PSP_DEFAULT_PROVIDER: mock
+    ports:
+      - "4105:4105"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4105
+    ports:
+      - "3105:3105"
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:

@@ -1,0 +1,78 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: var(--space-5);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.login-head {
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--space-4);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.login-title { font-size: var(--text-xl); font-weight: 700; color: var(--text); }
+.login-sub { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space-1); }
+
+.login-body { padding: var(--space-6) var(--space-8) var(--space-8); }
+.login-body .form-group { margin-bottom: var(--space-4); }
+
+.login-btn {
+  width: 100%;
+  min-height: var(--control-h);
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background var(--transition-fast);
+}
+
+.login-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.login-error {
+  background: var(--badge-rejected-bg);
+  border: 1px solid var(--badge-rejected-text);
+  color: var(--badge-rejected-text);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+.login-foot {
+  text-align: center;
+  padding: var(--space-3) 0 var(--space-5);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}

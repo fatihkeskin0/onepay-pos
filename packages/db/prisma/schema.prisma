@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum CashierRole {
+  kasiyer
+  admin
+  wd_manager
+}
+
+enum DepositStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum AnnouncementType {
+  info
+  warning
+  success
+}
+
+enum ChatSender {
+  cashier
+  admin
+}
+
+enum TransactionStatus {
+  completed
+  rolled_back
+}
+
+enum PspTransactionStatus {
+  initiated
+  processing
+  paid
+  failed
+  refunded
+}
+
+enum PspSettlementStatus {
+  pending
+  matched
+  partial
+}
+
+model Site {
+  id                    Int               @id @default(autoincrement()) @db.UnsignedInt
+  name                  String            @db.VarChar(100)
+  apiKey                String            @unique @map("api_key") @db.VarChar(64)
+  minDeposit            Decimal           @default(100) @map("min_deposit") @db.Decimal(10, 2)
+  minWithdrawal         Decimal           @default(100) @map("min_withdrawal") @db.Decimal(10, 2)
+  depCommissionRate     Decimal           @default(0) @map("dep_commission_rate") @db.Decimal(5, 2)
+  wdCommissionRate      Decimal           @default(0) @map("wd_commission_rate") @db.Decimal(5, 2)
+  deliveryRate          Decimal           @default(0) @map("delivery_rate") @db.Decimal(5, 2)
+  isActive              Boolean           @default(true) @map("is_active")
+  callbackUrl           String?           @map("callback_url") @db.VarChar(512)
+  callbackUrlDeposit    String?           @map("callback_url_deposit") @db.VarChar(512)
+  callbackUrlWithdrawal String?           @map("callback_url_withdrawal") @db.VarChar(512)
+  brandColor            String            @default("#2563EB") @map("brand_color") @db.VarChar(7)
+  brandBgColor          String            @default("#F4F7FC") @map("brand_bg_color") @db.VarChar(7)
+  brandLogoUrl          String?           @map("brand_logo_url") @db.VarChar(255)
+  telegramChatId        String?           @map("telegram_chat_id") @db.VarChar(50)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  paymentSessions       PaymentSession[]
+  deposits              Deposit[]
+  cashierSites          CashierSite[]
+
+  @@map("sites")
+}
+
+model Cashier {
+  id                     Int              @id @default(autoincrement()) @db.UnsignedInt
+  username               String           @unique @db.VarChar(50)
+  passwordHash           String           @map("password_hash") @db.VarChar(255)
+  role                   CashierRole      @default(kasiyer)
+  commissionRate         Decimal          @default(5) @map("commission_rate") @db.Decimal(5, 2)
+  siteId                 Int?             @map("site_id") @db.UnsignedInt
+  isActive               Boolean          @default(true) @map("is_active")
+  totpSecret             String?          @map("totp_secret") @db.VarChar(64)
+  totpEnabled            Boolean          @default(false) @map("totp_enabled")
+  lastLogin              DateTime?        @map("last_login")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  lastSeenAt             DateTime?        @map("last_seen_at")
+  tokenVersion           Int              @default(0) @map("token_version")
+  theme                  String           @default("light") @db.VarChar(10)
+  telegramChatId         String?          @map("telegram_chat_id") @db.VarChar(50)
+  telegramChatIdPending  String?          @map("telegram_chat_id_pending") @db.VarChar(64)
+  tgNotifyDeposit        Boolean          @default(true) @map("tg_notify_deposit")
+  tgNotifyWithdrawal     Boolean          @default(true) @map("tg_notify_withdrawal")
+  tgNotifySettlement     Boolean          @default(true) @map("tg_notify_settlement")
+  tgNotifyPayout         Boolean          @default(true) @map("tg_notify_payout")
+  ipLockEnabled          Boolean          @default(true) @map("ip_lock_enabled")
+  adminNote              String?          @map("admin_note") @db.Text
+  commissionCredited     Decimal          @default(0) @map("commission_credited") @db.Decimal(12, 2)
+  subUsers               CashierSubUser[]
+  cashierSites           CashierSite[]
+  deposits               Deposit[]
+  auditLogs              AuditLog[]
+  loginLogs              LoginLog[]
+  chatMessages           ChatMessage[]
+
+  @@map("cashiers")
+}
+
+model CashierSubUser {
+  id           Int      @id @default(autoincrement())
+  cashierId    Int      @map("cashier_id") @db.UnsignedInt
+  username     String   @unique @db.VarChar(60)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  displayName  String?  @map("display_name") @db.VarChar(100)
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  lastSeenAt   DateTime? @map("last_seen_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  permissions  Json?
+  cashier      Cashier  @relation(fields: [cashierId], references: [id])
+
+  @@index([cashierId])
+  @@map("cashier_sub_users")
+}
+
+model CashierSite {
+  cashierId Int @map("cashier_id") @db.UnsignedInt
+  siteId    Int @map("site_id") @db.UnsignedInt
+  cashier   Cashier @relation(fields: [cashierId], references: [id])
+  site      Site    @relation(fields: [siteId], references: [id])
+
+  @@id([cashierId, siteId])
+  @@map("cashier_sites")
+}
+
+model Deposit {
+  id                       Int           @id @default(autoincrement()) @db.UnsignedInt
+  userId                   String        @map("user_id") @db.VarChar(100)
+  siteId                   Int?          @map("site_id") @db.UnsignedInt
+  amount                   Decimal       @db.Decimal(15, 2)
+  method                   String        @default("card") @db.VarChar(30)
+  reference                String        @unique @db.VarChar(20)
+  token                    String        @unique @db.VarChar(64)
+  status                   DepositStatus @default(pending)
+  cashierId                Int?          @map("cashier_id") @db.UnsignedInt
+  rejectReason             String?       @map("reject_reason") @db.VarChar(255)
+  approvedAt               DateTime?     @map("approved_at")
+  createdAt                DateTime      @default(now()) @map("created_at")
+  isSuspicious             Boolean       @default(false) @map("is_suspicious")
+  suspiciousReason         String?       @map("suspicious_reason") @db.VarChar(255)
+  processedBySubId         Int?          @map("processed_by_sub_id")
+  processedBySubUsername   String?       @map("processed_by_sub_username") @db.VarChar(100)
+  processedByAdminUsername String?       @map("processed_by_admin_username") @db.VarChar(100)
+  externalId               String?       @map("external_id") @db.VarChar(128)
+  pspProvider              String?       @map("psp_provider") @db.VarChar(30)
+  pspRef                   String?       @map("psp_ref") @db.VarChar(128)
+  commissionRate           Decimal       @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  commissionAmount         Decimal       @default(0) @map("commission_amount") @db.Decimal(15, 2)
+  site                     Site?         @relation(fields: [siteId], references: [id])
+  cashier                  Cashier?      @relation(fields: [cashierId], references: [id])
+  pspTransactions          PspTransaction[]
+  editLogs                 DepositEditLog[]
+
+  @@index([status])
+  @@index([userId])
+  @@index([siteId])
+  @@index([createdAt])
+  @@map("deposits")
+}
+
+model PaymentSession {
+  id           Int      @id @default(autoincrement()) @db.UnsignedInt
+  token        String   @unique @db.VarChar(40)
+  siteId       Int      @map("site_id") @db.UnsignedInt
+  userId       String   @map("user_id") @db.VarChar(100)
+  amount       Decimal  @db.Decimal(15, 2)
+  userName     String   @default("") @map("user_name") @db.VarChar(100)
+  returnUrl    String   @default("") @map("return_url") @db.VarChar(500)
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  depositRef   String?  @map("deposit_ref") @db.VarChar(64)
+  depositToken String?  @map("deposit_token") @db.VarChar(64)
+  externalId   String?  @map("external_id") @db.VarChar(128)
+  site         Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("payment_sessions")
+}
+
+model Wallet {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  userId    String   @unique @map("user_id") @db.VarChar(100)
+  balance   Decimal  @default(0) @db.Decimal(15, 2)
+  currency  String   @default("TRY") @db.Char(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id        BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    String            @map("user_id") @db.VarChar(100)
+  type      String            @db.VarChar(30)
+  amount    Decimal           @db.Decimal(15, 2)
+  bcTxId    String?           @unique @map("bc_tx_id") @db.VarChar(100)
+  status    TransactionStatus @default(completed)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("transactions")
+}
+
+model PspTransaction {
+  id          Int                  @id @default(autoincrement()) @db.UnsignedInt
+  depositId   Int                  @map("deposit_id") @db.UnsignedInt
+  provider    String               @db.VarChar(30)
+  providerRef String?              @map("provider_ref") @db.VarChar(128)
+  status      PspTransactionStatus @default(initiated)
+  amount      Decimal              @db.Decimal(15, 2)
+  threeDsStatus String?            @map("three_ds_status") @db.VarChar(30)
+  redirectUrl String?              @map("redirect_url") @db.VarChar(512)
+  rawRequest  Json?                @map("raw_request")
+  rawResponse Json?                @map("raw_response")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  deposit     Deposit              @relation(fields: [depositId], references: [id])
+
+  @@index([depositId])
+  @@index([providerRef])
+  @@map("psp_transactions")
+}
+
+model PspSettlement {
+  id           Int                 @id @default(autoincrement()) @db.UnsignedInt
+  provider     String              @db.VarChar(30)
+  periodStart  DateTime            @map("period_start")
+  periodEnd    DateTime            @map("period_end")
+  grossAmount  Decimal             @map("gross_amount") @db.Decimal(15, 2)
+  feeAmount    Decimal             @map("fee_amount") @db.Decimal(15, 2)
+  netAmount    Decimal             @map("net_amount") @db.Decimal(15, 2)
+  matchedCount Int                 @default(0) @map("matched_count")
+  status       PspSettlementStatus @default(pending)
+  rawData      Json?               @map("raw_data")
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  @@map("psp_settlements")
+}
+
+model Setting {
+  key       String   @id @db.VarChar(100)
+  value     String?  @db.Text
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Announcement {
+  id        Int              @id @default(autoincrement()) @db.UnsignedInt
+  title     String           @db.VarChar(200)
+  body      String           @db.MediumText
+  type      AnnouncementType @default(info)
+  isActive  Boolean          @default(true) @map("is_active")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime?        @updatedAt @map("updated_at")
+
+  @@map("announcements")
+}
+
+model ChatMessage {
+  id         Int        @id @default(autoincrement()) @db.UnsignedInt
+  cashierId  Int        @map("cashier_id") @db.UnsignedInt
+  sender     ChatSender
+  senderName String     @default("") @map("sender_name") @db.VarChar(100)
+  message    String     @db.Text
+  createdAt  DateTime   @default(now()) @map("created_at")
+  readAt     DateTime?  @map("read_at")
+  cashier    Cashier    @relation(fields: [cashierId], references: [id])
+
+  @@index([cashierId, createdAt])
+  @@map("chat_messages")
+}
+
+model LoginLog {
+  id          Int       @id @default(autoincrement()) @db.UnsignedInt
+  cashierId   Int       @map("cashier_id") @db.UnsignedInt
+  username    String    @db.VarChar(60)
+  role        String    @db.VarChar(20)
+  ip          String    @default("") @db.VarChar(45)
+  loggedInAt  DateTime  @default(now()) @map("logged_in_at")
+  loggedOutAt DateTime? @map("logged_out_at")
+  cashier     Cashier   @relation(fields: [cashierId], references: [id])
+
+  @@index([loggedInAt])
+  @@index([cashierId])
+  @@map("login_logs")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  cashierId Int      @map("cashier_id") @db.UnsignedInt
+  action    String   @db.VarChar(50)
+  target    String?  @db.VarChar(100)
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  cashier   Cashier  @relation(fields: [cashierId], references: [id])
+
+  @@index([cashierId])
+  @@map("audit_log")
+}
+
+model DepositEditLog {
+  id        Int      @id @default(autoincrement()) @db.UnsignedInt
+  depositId Int      @map("deposit_id") @db.UnsignedInt
+  oldAmount Decimal  @map("old_amount") @db.Decimal(12, 2)
+  newAmount Decimal  @map("new_amount") @db.Decimal(12, 2)
+  editedBy  String   @map("edited_by") @db.VarChar(64)
+  editedAt  DateTime @default(now()) @map("edited_at")
+  deposit   Deposit  @relation(fields: [depositId], references: [id])
+
+  @@index([depositId])
+  @@map("deposit_edit_logs")
+}
+
+model RateLimit {
+  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  key       String @db.VarChar(120)
+  createdAt Int    @map("created_at") @db.UnsignedInt
+
+  @@index([key, createdAt])
+  @@map("rate_limit")
+}
+
+model PosMethod {
+  id        Int      @id @default(autoincrement())
+  provider  String   @unique @db.VarChar(30)
+  label     String   @db.VarChar(60)
+  enabled   Boolean  @default(false)
+  isDefault Boolean  @default(false) @map("is_default")
+  minAmount Decimal  @default(50) @map("min_amount") @db.Decimal(12, 2)
+  maxAmount Decimal  @default(100000) @map("max_amount") @db.Decimal(12, 2)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("pos_methods")
+}
