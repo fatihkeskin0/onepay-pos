@@ -18,11 +18,12 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 3. Create **PostgreSQL** and **Redis** as separate Coolify resources; copy their internal URLs into `DATABASE_URL` and `REDIS_URL`.
 4. `DATABASE_URL` / `REDIS_URL` must use **Coolify internal hostnames** (from each resource’s connection string — not `@postgres:5432`).
 5. The compose file attaches `api` to the external `coolify` Docker network so it can reach managed Postgres/Redis.
-6. Map domains in Coolify **Domains** tab (all → web service port 3105):
-   - **Marketing** → `https://onekart.info` — landing + `/docs` (`APP_MARKETING_URL`)
-   - **Panel** → `https://app.onekart.info` — admin UI, no `/panel` prefix (`APP_BASE_URL`)
-   - **Payment** → `https://odeme.click` — customer `/pay/*` (`APP_PAYMENT_URL`)
-   - **api** → `https://api.onekart.info` (`API_PUBLIC_URL`)
+6. Map domains in Coolify **Domains** tab — **each hostname must be listed separately** on the **web** service (port **3105**):
+   - `https://onekart.info` — marketing landing + `/docs`
+   - `https://app.onekart.info` — panel (`/login`, `/dashboard`, …)
+   - `https://odeme.click` — customer `/pay/*` only
+   - **api** service (port **4105**): `https://api.onekart.info`
+   - Missing `app.*` in Domains → Traefik shows **“no available server”** even when `onekart.info` works.
 7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`

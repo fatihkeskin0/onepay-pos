@@ -48,9 +48,13 @@ services:
       args:
         NEXT_PUBLIC_API_URL: http://api:4105
     restart: unless-stopped
+    networks:
+      - default
+      - coolify
     environment:
       PORT: 3105
       HOSTNAME: 0.0.0.0
+      APP_MARKETING_URL: ${APP_MARKETING_URL:?set APP_MARKETING_URL}
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       APP_PAYMENT_URL: ${APP_PAYMENT_URL:?set APP_PAYMENT_URL}
     depends_on:

@@ -1,29 +1,54 @@
-node_modules
-.next
-dist
-.turbo
-out
+# Dependencies
+node_modules/
 
-# Secrets
+# Build output
+dist/
+out/
+.next/
+.turbo/
+
+# TypeScript incremental
+*.tsbuildinfo
+
+# Secrets & env (keep *.example tracked)
 .env
-.env.local
-.env.production
+.env.*
 !.env.example
 !.env.production.example
 
-# Logs & OS
+# Logs & debug
 *.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage/
+
+# ESLint cache
+.eslintcache
+
+# OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Legacy PHP stack (separate repo)
 onepay/
+
+# Local reference docs (exported HTML/PDF, not part of app)
+betco-doc/
 
 # IDE / local tooling
 .cursor/
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Local artifacts
+# Local artifacts & scratch
 messages.html
+
+# Vercel / deploy tooling (if used locally)
+.vercel/
