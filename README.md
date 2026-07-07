@@ -102,7 +102,7 @@ Local dev seed: `pnpm db:seed` (uses `.env` via dotenv).
 
 See [ops/coolify/README.md](ops/coolify/README.md).
 
-- Compose file: `docker-compose.yaml` (or `ops/docker/compose.prod.yaml`)
+- Compose file: `docker-compose.yaml` (Coolify); bundled local: `ops/docker/compose.bundled.yaml`
 - Env template: `.env.production.example`
 - Deploy: Coolify → Docker Compose → map web (3105) + api (4105) domains
 

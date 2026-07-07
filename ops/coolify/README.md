@@ -8,25 +8,23 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 |---------|-------------------|------|---------------|
 | `web` | `ops/docker/Dockerfile.web` | 3105 | Yes — panel + `/pay/*` + `/docs` |
 | `api` | `ops/docker/Dockerfile.api` | 4105 | Yes — PSP webhooks (`/psp/*`) |
-| `postgres` | `postgres:16-alpine` | 5432 | No — use Coolify PostgreSQL resource |
-| `redis` | `redis:7-alpine` | 6379 | No — use Coolify Redis resource |
 
-**Required backing services:** PostgreSQL and Redis — use **Coolify managed resources** (recommended) or bundled `ops/docker/compose.prod.yaml` for local/self-contained deploy.
+**Required backing services:** PostgreSQL and Redis — use **Coolify managed resources** (e.g. `postgres:18-alpine`). Bundled stack for local only: `ops/docker/compose.bundled.yaml`.
 
 ## Quick setup
 
-1. Create **PostgreSQL** and **Redis** resources in Coolify (separate from this compose).
-2. Create a **Docker Compose** project pointing to this repo.
-3. **Docker Compose Location:** `/docker-compose.yaml` (api + web only — no bundled postgres/redis).
-4. Copy connection strings from Coolify DB/Redis into env: `DATABASE_URL`, `REDIS_URL`.
-4. Map domains in Coolify **Domains** tab:
+1. Create a **Docker Compose** project pointing to this repo.
+2. **Docker Compose Location:** `/docker-compose.yaml` (api + web only — not `/ops/docker/compose.prod.yaml`).
+3. Create **PostgreSQL** and **Redis** as separate Coolify resources; copy their internal URLs into `DATABASE_URL` and `REDIS_URL`.
+4. Link the compose stack to the same Coolify network as DB/Redis (or use the connection strings Coolify provides).
+5. Map domains in Coolify **Domains** tab:
    - **web** → panel domain (e.g. `https://onekart.info`)
    - **api** → webhook domain (e.g. `https://api.onekart.info`)
-5. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
+6. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
-6. Set secrets: `APP_SECRET`, `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, PSP creds
-7. Deploy. API entrypoint runs `prisma migrate deploy` automatically.
+7. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, PSP creds
+8. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
 
 ## Environment variables
 
@@ -39,9 +37,8 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 | `APP_PAYMENT_URL` | Payment URL (customer `/pay/*` links) — **required** |
 | `API_PUBLIC_URL` | PSP webhook base URL — **required** |
 | `CORS_ORIGIN` | Optional comma-separated origins; defaults to panel + payment URLs |
-| `POSTGRES_PASSWORD` | PostgreSQL password |
-| `DATABASE_URL` | `postgresql://user:pass@host:5432/onepara_card` |
-| `REDIS_URL` | Redis connection string |
+| `DATABASE_URL` | `postgresql://user:pass@host:5432/onepara_card` — use Coolify Postgres internal hostname |
+| `REDIS_URL` | Redis connection string — use Coolify Redis internal URL |
 
 ### PSP (fill only active provider)
 
@@ -72,13 +69,11 @@ Or run locally against production DB with `DATABASE_URL` and `APP_ENV=production
 
 Seeding is blocked in production without `SEED_ALLOW=1`. Admin password comes from `SEED_ADMIN_PASSWORD` (not logged). Activate your PSP in **Admin → POS Ayarları** after seed.
 
-## External PostgreSQL / Redis
+## Local bundled stack (postgres + redis)
 
-To use Coolify-managed services instead of bundled compose services:
-
-1. Remove `postgres` and/or `redis` from compose (or disable them).
-2. Set `DATABASE_URL` and/or `REDIS_URL` to external connection strings.
-3. Remove corresponding `depends_on` entries from the `api` service.
+```powershell
+docker compose -f ops/docker/compose.bundled.yaml up --build
+```
 
 ## Architecture notes
 
