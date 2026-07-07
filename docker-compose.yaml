@@ -1,44 +1,16 @@
 # Production stack for Coolify — use Docker Compose Location: /docker-compose.yaml
-# Build context is repo root (.); do not point Coolify at ops/docker/compose.prod.yaml
+# Uses external PostgreSQL + Redis (Coolify managed resources).
+# Set DATABASE_URL and REDIS_URL in Coolify env to the external connection strings.
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-onepara_card}
-      POSTGRES_USER: ${POSTGRES_USER:-onepara}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onepara} -d ${POSTGRES_DB:-onepara_card}"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
   api:
     build:
       context: .
       dockerfile: ops/docker/Dockerfile.api
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-onepara}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-onepara_card}}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?set REDIS_URL}
       APP_SECRET: ${APP_SECRET:?set APP_SECRET}
       APP_ENV: production
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
@@ -61,11 +33,6 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       SUMUP_API_KEY: ${SUMUP_API_KEY:-}
       SUMUP_MERCHANT_CODE: ${SUMUP_MERCHANT_CODE:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4105/health"]
       interval: 30s
@@ -94,7 +61,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 45s
-
-volumes:
-  pg_data:
-  redis_data:

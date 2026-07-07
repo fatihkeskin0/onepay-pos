@@ -1,5 +1,5 @@
-# Production stack — prefer repo-root /docker-compose.yaml for Coolify (build context ".").
-# Local: docker compose -f ops/docker/compose.prod.yaml up (from repo root).
+# Self-contained production stack (bundled postgres + redis).
+# Local / simple deploy: docker compose -f ops/docker/compose.prod.yaml up --build
 
 services:
   postgres:

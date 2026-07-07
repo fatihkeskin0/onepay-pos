@@ -8,16 +8,17 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 |---------|-------------------|------|---------------|
 | `web` | `ops/docker/Dockerfile.web` | 3105 | Yes — panel + `/pay/*` + `/docs` |
 | `api` | `ops/docker/Dockerfile.api` | 4105 | Yes — PSP webhooks (`/psp/*`) |
-| `postgres` | `postgres:16-alpine` | 5432 | No — internal only |
-| `redis` | `redis:7-alpine` | 6379 | No — internal only |
+| `postgres` | `postgres:16-alpine` | 5432 | No — use Coolify PostgreSQL resource |
+| `redis` | `redis:7-alpine` | 6379 | No — use Coolify Redis resource |
 
-**Required backing services:** PostgreSQL (all data — financial + logs) and Redis (rate limiting + cache).
+**Required backing services:** PostgreSQL and Redis — use **Coolify managed resources** (recommended) or bundled `ops/docker/compose.prod.yaml` for local/self-contained deploy.
 
 ## Quick setup
 
-1. Create a new **Docker Compose** project in Coolify.
-2. Point to this repo; **Docker Compose Location: `/docker-compose.yaml`** (repo root — not `ops/docker/compose.prod.yaml`).
-3. Copy `.env.production.example` → Coolify **Environment Variables**.
+1. Create **PostgreSQL** and **Redis** resources in Coolify (separate from this compose).
+2. Create a **Docker Compose** project pointing to this repo.
+3. **Docker Compose Location:** `/docker-compose.yaml` (api + web only — no bundled postgres/redis).
+4. Copy connection strings from Coolify DB/Redis into env: `DATABASE_URL`, `REDIS_URL`.
 4. Map domains in Coolify **Domains** tab:
    - **web** → panel domain (e.g. `https://onekart.info`)
    - **api** → webhook domain (e.g. `https://api.onekart.info`)
