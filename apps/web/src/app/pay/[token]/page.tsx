@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Spinner } from "@/components/ui/Spinner";
 import { StripePaymentPanel } from "@/components/pay/StripePaymentPanel";
 import { resolveBrandLogoUrl } from "@/lib/brand-logo";
+import { apiUrl } from "@/lib/api-base";
 
 type PayState = "entry" | "ready" | "pending" | "success" | "rejected" | "expired";
 type PspRenderMode = "redirect" | "iframe" | "stripe_elements";
@@ -110,7 +111,7 @@ export default function PayPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`/backend/user/pos_methods?token=${encodeURIComponent(token)}`);
+        const res = await fetch(apiUrl(`/user/pos_methods?token=${encodeURIComponent(token)}`));
         const json = (await res.json()) as {
           success: boolean;
           message?: string;
@@ -138,7 +139,7 @@ export default function PayPage() {
 
   const pollStatus = useCallback(async (ref: string, tok: string) => {
     try {
-      const res = await fetch(`/backend/user/deposit_status?ref=${ref}&token=${tok}`);
+      const res = await fetch(apiUrl(`/user/deposit_status?ref=${ref}&token=${tok}`));
       const json = (await res.json()) as {
         success: boolean;
         data: { status: string; reject_reason?: string };
@@ -204,7 +205,7 @@ export default function PayPage() {
     setPayError("");
 
     try {
-      const res = await fetch("/backend/user/create_deposit", {
+      const res = await fetch(apiUrl("/user/create_deposit"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-base";
+
 interface PublicApiEnvelope<T> {
   success: boolean;
   message: string;
@@ -7,7 +9,7 @@ interface PublicApiEnvelope<T> {
 async function publicRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/backend/public${path}`, {
+    res = await fetch(apiUrl(`/public${path}`), {
       method,
       headers: { "Content-Type": "application/json" },
       body: body != null ? JSON.stringify(body) : undefined,

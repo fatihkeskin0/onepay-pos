@@ -36,6 +36,7 @@ const nextConfig = {
     APP_MARKETING_URL: process.env.APP_MARKETING_URL ?? "",
     APP_BASE_URL: process.env.APP_BASE_URL ?? "",
     APP_PAYMENT_URL: process.env.APP_PAYMENT_URL ?? "",
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "",
   },
   webpack: (config, { dev }) => {
     if (dev) {
@@ -55,7 +56,7 @@ const nextConfig = {
     return config;
   },
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4105";
+    const apiUrl = process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4105";
     return [{ source: "/backend/:path*", destination: `${apiUrl}/:path*` }];
   },
 };

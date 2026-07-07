@@ -13,8 +13,10 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web ./apps/web
 COPY packages ./packages
 
-ARG NEXT_PUBLIC_API_URL=http://api:4105
+ARG NEXT_PUBLIC_API_URL=http://localhost:4105
+ARG INTERNAL_API_URL=http://localhost:4105
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 ENV DOCKER_BUILD=1
 
 RUN pnpm --filter @onepara/shared build

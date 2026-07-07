@@ -1,7 +1,6 @@
 import { LS_KEYS } from "@onepara/shared";
 import { isPublicAuthPath } from "@/lib/auth-paths";
-
-const BASE = "/backend";
+import { apiUrl } from "@/lib/api-base";
 
 function clearSessionKeepPreferences(): void {
   const theme = localStorage.getItem(LS_KEYS.theme);
@@ -19,7 +18,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(apiUrl(path), {
       method,
       headers,
       body: body != null ? JSON.stringify(body) : undefined,
@@ -61,7 +60,7 @@ export const API = {
 
     let res: Response;
     try {
-      res = await fetch(`${BASE}${path}`, { method: "GET", headers });
+      res = await fetch(apiUrl(path), { method: "GET", headers });
     } catch {
       throw new Error("Sunucuya ulaşılamıyor");
     }

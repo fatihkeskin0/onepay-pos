@@ -47,7 +47,8 @@ services:
       context: .
       dockerfile: ops/docker/Dockerfile.web
       args:
-        NEXT_PUBLIC_API_URL: http://api:4105
+        NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
+        INTERNAL_API_URL: http://api:4105
     restart: unless-stopped
     networks:
       - default

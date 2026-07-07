@@ -26,6 +26,7 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
    - Missing `app.*` in Domains → Traefik shows **“no available server”** even when `onekart.info` works.
 7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
+   - Web build uses `API_PUBLIC_URL` as `NEXT_PUBLIC_API_URL` (browser calls `https://api.onekart.info` directly)
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
 8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
 9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
@@ -82,7 +83,8 @@ docker compose -f ops/docker/compose.bundled.yaml up --build
 
 ## Architecture notes
 
-- Web proxies `/backend/*` → internal `http://api:4105/*` (set at build via `NEXT_PUBLIC_API_URL`).
+- Web proxies `/backend/*` → internal `http://api:4105/*` (fallback when build lacks public API URL).
+- Panel/pay browser requests use `NEXT_PUBLIC_API_URL` (`API_PUBLIC_URL` at build), e.g. `https://api.onekart.info`.
 - Merchants integrate via `/backend/user/*` on the **web** domain.
 - PSP callbacks hit **api** domain: `POST /psp/{provider}/callback`.
 - Health checks: `GET /api/health` (web), `GET /health` (api — includes Redis status).
