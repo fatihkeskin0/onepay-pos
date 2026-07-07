@@ -18,20 +18,13 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 1. Create a new **Docker Compose** project in Coolify.
 2. Point to this repo; compose file: `docker-compose.yaml` (default) or `ops/docker/compose.prod.yaml`.
 3. Copy `.env.production.example` → Coolify **Environment Variables**.
-4. Map domains in Coolify (Coolify sets `SERVICE_URL_*` automatically):
-   - **web** service → port `3105` (panel domain → `SERVICE_URL_WEB`)
-   - **api** service → port `4105` (webhook domain → `SERVICE_URL_API`)
-5. **Split panel / payment domains** (any two root domains — subdomains optional):
-   - Point domain A at **web** → panel (`APP_BASE_URL`, e.g. `https://panel.sirket.com`)
-   - Point domain B at the same **web** service → payment (`APP_PAYMENT_URL`, e.g. `https://odeme.click`)
-   - Middleware keeps `/panel/*` on panel domain and `/pay/*` on payment domain (cross-domain redirects).
-   - Customer payment links always use `APP_PAYMENT_URL` (API-generated).
-   - CORS auto-includes both origins.
-6. Set required env:
-   - `APP_SECRET`, `POSTGRES_PASSWORD`
-   - `REDIS_URL` — default `redis://redis:6379` (compose internal)
-   - PSP creds for your active provider
-   - `APP_PAYMENT_URL` when payment domain differs from panel
+4. Map domains in Coolify **Domains** tab:
+   - **web** → panel domain (e.g. `https://onekart.info`)
+   - **api** → webhook domain (e.g. `https://api.onekart.info`)
+5. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
+   - `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
+   - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
+6. Set secrets: `APP_SECRET`, `POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, PSP creds
 7. Deploy. API entrypoint runs `prisma migrate deploy` automatically.
 
 ## Environment variables
@@ -41,12 +34,9 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 | Variable | Description |
 |----------|-------------|
 | `APP_SECRET` | JWT/session signing secret |
-| `SERVICE_URL_WEB` | Auto — Coolify web domain (panel; `APP_BASE_URL` fallback) |
-| `SERVICE_URL_API` | Auto — Coolify api domain (`API_PUBLIC_URL` fallback) |
-| `APP_BASE_URL` | Panel URL override (admin `/panel/*`) |
-| `APP_PAYMENT_URL` | Payment URL override (customer `/pay/*` links) |
-| `SERVICE_URL_PAYMENT` | Optional Coolify-style alias for payment domain |
-| `API_PUBLIC_URL` | Optional override for PSP webhooks |
+| `APP_BASE_URL` | Panel URL (admin `/panel/*`) — **required** |
+| `APP_PAYMENT_URL` | Payment URL (customer `/pay/*` links) — **required** |
+| `API_PUBLIC_URL` | PSP webhook base URL — **required** |
 | `CORS_ORIGIN` | Optional comma-separated origins; defaults to panel + payment URLs |
 | `POSTGRES_PASSWORD` | PostgreSQL password |
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/onepara_card` |
