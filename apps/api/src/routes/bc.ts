@@ -5,6 +5,12 @@ import { bcOk, bcError } from "../services/response.js";
 import { credit, debit, rollback, getOrCreateWallet } from "../services/wallet.js";
 import { byIp } from "../services/rate-limit.js";
 
+function parsePositiveAmount(value: unknown): number | null {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return amount;
+}
+
 export async function bcRoutes(app: FastifyInstance): Promise<void> {
   const verify = async (
     request: { body: unknown; headers: Record<string, unknown>; ip?: string },
@@ -31,8 +37,13 @@ export async function bcRoutes(app: FastifyInstance): Promise<void> {
   app.post("/credit", async (request, reply) => {
     if (!(await verify(request, reply))) return;
     const body = request.body as { UserId?: string; Amount?: number; TransactionId?: string };
-    const ok = await credit(String(body.UserId), Number(body.Amount), String(body.TransactionId), "win");
-    if (!ok) {
+    const amount = parsePositiveAmount(body.Amount);
+    if (!amount) {
+      bcError(reply, 5, "Invalid amount");
+      return;
+    }
+    const okResult = await credit(String(body.UserId), amount, String(body.TransactionId), "win");
+    if (!okResult) {
       bcError(reply, 2, "Duplicate transaction");
       return;
     }
@@ -43,8 +54,13 @@ export async function bcRoutes(app: FastifyInstance): Promise<void> {
   app.post("/debit", async (request, reply) => {
     if (!(await verify(request, reply))) return;
     const body = request.body as { UserId?: string; Amount?: number; TransactionId?: string };
-    const ok = await debit(String(body.UserId), Number(body.Amount), String(body.TransactionId), "bet");
-    if (!ok) {
+    const amount = parsePositiveAmount(body.Amount);
+    if (!amount) {
+      bcError(reply, 5, "Invalid amount");
+      return;
+    }
+    const okResult = await debit(String(body.UserId), amount, String(body.TransactionId), "bet");
+    if (!okResult) {
       bcError(reply, 3, "Insufficient balance");
       return;
     }
@@ -55,12 +71,24 @@ export async function bcRoutes(app: FastifyInstance): Promise<void> {
   app.post("/rollback", async (request, reply) => {
     if (!(await verify(request, reply))) return;
     const body = request.body as { TransactionId?: string; UserId?: string };
-    const ok = await rollback(String(body.TransactionId));
-    if (!ok) {
+    const txId = String(body.TransactionId ?? "");
+    const userId = String(body.UserId ?? "");
+
+    const original = await prisma.transaction.findFirst({
+      where: { bcTxId: txId, status: "completed" },
+    });
+
+    if (!original || original.userId !== userId) {
       bcError(reply, 4, "Transaction not found");
       return;
     }
-    const wallet = await getOrCreateWallet(String(body.UserId));
+
+    const okResult = await rollback(txId);
+    if (!okResult) {
+      bcError(reply, 4, "Transaction not found");
+      return;
+    }
+    const wallet = await getOrCreateWallet(userId);
     bcOk(reply, { Balance: Number(wallet.balance) });
   });
 }

@@ -480,30 +480,51 @@
   font-weight: 600;
 }
 
-/* mock-3ds */
-.mock-3ds-wrap {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-6);
-  background: var(--bg);
+.pay-embed {
+  margin-top: var(--space-2);
 }
 
-.mock-3ds-card {
+.pay-embed-iframe {
   width: 100%;
-  max-width: 400px;
-  background: var(--surface);
+  min-height: 420px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-lg);
-  text-align: center;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-.mock-3ds-title { font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-2); }
-.mock-3ds-desc { font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--space-6); }
-.mock-3ds-actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+.pay-stripe-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pay-pending-note {
+  margin-top: var(--space-4);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.payment-home-card { max-width: 440px; }
+.payment-home-body { padding: var(--space-6); }
+.payment-home-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+.payment-home-desc {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.6;
+}
+.payment-home-list {
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.7;
+}
 
 @media (max-width: 480px) {
   .pay-page { padding: var(--space-4) var(--space-3) var(--space-8); }

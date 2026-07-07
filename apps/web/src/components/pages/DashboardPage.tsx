@@ -183,7 +183,7 @@ export default function DashboardPage() {
     { href: PAGE_HREF["adm-dep"], label: "Yatırımlar", desc: "Bekleyen ve onaylı", icon: "card" as StatIcon },
     { href: PAGE_HREF["adm-siteler"], label: "Siteler", desc: "Komisyon ve API", icon: "globe" as StatIcon },
     { href: PAGE_HREF["adm-site-mutabakat"], label: "Site Mutabakatı", desc: "Brüt / komisyon / net", icon: "receipt" as StatIcon },
-    { href: PAGE_HREF["adm-pos"], label: "POS Ayarları", desc: "PayTR, Stripe, Mock", icon: "bank" as StatIcon },
+    { href: PAGE_HREF["adm-pos"], label: "POS Ayarları", desc: "PayTR, Stripe, SumUp", icon: "bank" as StatIcon },
     { href: PAGE_HREF["adm-reconciliation"], label: "PSP Mutabakatı", desc: "Settlement eşleştirme", icon: "sync" as StatIcon },
     { href: PAGE_HREF["adm-raporlar"], label: "Raporlar", desc: "Durum özeti", icon: "report" as StatIcon },
   ];

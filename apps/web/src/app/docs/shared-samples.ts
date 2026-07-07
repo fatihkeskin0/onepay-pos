@@ -41,7 +41,7 @@ export const SAMPLE_DEPOSIT_STATUS_RES = `{
     "reject_reason": null,
     "remaining_seconds": 0,
     "redirect_url": null,
-    "provider": "mock"
+    "provider": "stripe"
   }
 }`;
 

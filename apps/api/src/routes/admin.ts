@@ -6,7 +6,8 @@ import { ok, error } from "../services/response.js";
 import { config } from "../config.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback, invalidateSettingCache } from "../services/callback.js";
-import { invalidatePosMethodsCache, listPosMethodsWithMeta } from "../services/pos-methods.js";
+import { invalidatePosMethodsCache, listPosMethodsWithMeta, activateSinglePosMethod, deactivatePosMethod } from "../services/pos-methods.js";
+import { isKnownProvider } from "../services/psp/index.js";
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/dashboard", async (request, reply) => {
@@ -260,6 +261,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const deposit = await prisma.deposit.findUnique({ where: { id: Number(body.id) } });
     if (!deposit) {
       error(reply, "Bulunamadı", 404);
+      return;
+    }
+    if (deposit.status !== "pending") {
+      error(reply, "Yalnızca bekleyen yatırım tutarı değiştirilebilir", 409);
       return;
     }
     await prisma.depositEditLog.create({
@@ -578,9 +583,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       net_amount?: number;
     };
 
+    const provider = String(body.provider ?? "").trim();
+    if (!provider || !isKnownProvider(provider)) {
+      error(reply, "Geçerli provider gerekli (paytr, stripe, sumup)", 422);
+      return;
+    }
+
     const settlement = await prisma.pspSettlement.create({
       data: {
-        provider: String(body.provider ?? "mock"),
+        provider,
         periodStart: new Date(body.period_start ?? Date.now()),
         periodEnd: new Date(body.period_end ?? Date.now()),
         grossAmount: body.gross_amount ?? 0,
@@ -631,9 +642,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (body.is_default) {
-      await prisma.posMethod.updateMany({ data: { isDefault: false } });
-    }
+    const enabling = body.enabled === true;
 
     const method = await prisma.posMethod.upsert({
       where: { provider },
@@ -643,21 +652,28 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         minAmount: body.min_amount != null ? Number(body.min_amount) : undefined,
         maxAmount: body.max_amount != null ? Number(body.max_amount) : undefined,
         sortOrder: body.sort_order != null ? Number(body.sort_order) : undefined,
-        isDefault: body.is_default != null ? Boolean(body.is_default) : undefined,
       },
       create: {
         provider,
         label: String(body.label ?? provider),
-        enabled: Boolean(body.enabled ?? false),
+        enabled: false,
         minAmount: Number(body.min_amount ?? 50),
         maxAmount: Number(body.max_amount ?? 100000),
         sortOrder: Number(body.sort_order ?? 0),
-        isDefault: Boolean(body.is_default ?? false),
+        isDefault: false,
       },
     });
 
-    await invalidatePosMethodsCache();
-    ok(reply, { method });
+    if (enabling) {
+      await activateSinglePosMethod(provider);
+    } else if (body.enabled === false) {
+      await deactivatePosMethod(provider);
+    } else {
+      await invalidatePosMethodsCache();
+    }
+
+    const saved = await prisma.posMethod.findUnique({ where: { provider } });
+    ok(reply, { method: saved ?? method });
   });
 
   app.post("/toggle_pos_method", async (request, reply) => {
@@ -669,18 +685,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       error(reply, "Bulunamadı", 404);
       return;
     }
-    const updated = await prisma.posMethod.update({
-      where: { provider },
-      data: { enabled: !method.enabled },
-    });
-    await invalidatePosMethodsCache();
-    ok(reply, { method: updated });
-  });
 
-  app.post("/test_load", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    ok(reply, { loaded: true });
+    if (method.enabled) {
+      await deactivatePosMethod(provider);
+    } else {
+      await activateSinglePosMethod(provider);
+    }
+
+    const updated = await prisma.posMethod.findUnique({ where: { provider } });
+    ok(reply, { method: updated });
   });
 
   app.post("/demo_payment_link", async (request, reply) => {
@@ -735,11 +748,5 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       amount_editable: amount === 0,
       site_name: site.name,
     });
-  });
-
-  app.post("/test_reset", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    ok(reply, { reset: true });
   });
 }

@@ -5,15 +5,14 @@ import { useParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { StripePaymentPanel } from "@/components/pay/StripePaymentPanel";
 
 type PayState = "entry" | "ready" | "pending" | "success" | "rejected" | "expired";
+type PspRenderMode = "redirect" | "iframe" | "stripe_elements";
 
-interface PosMethodOption {
-  provider: string;
-  label: string;
+interface PayLimits {
   min: number;
   max: number;
-  isDefault: boolean;
 }
 
 interface SessionInfo {
@@ -24,13 +23,6 @@ interface SessionInfo {
   site_name: string;
   brand: { color: string; bg: string; logo: string | null; name: string };
 }
-
-const PROVIDER_HINT: Record<string, string> = {
-  mock: "Geliştirme ortamı",
-  paytr: "PayTR · 3D Secure",
-  stripe: "Stripe Checkout",
-  sumup: "SumUp · Kart ödemesi",
-};
 
 function brandDarken(hex: string, factor = 0.82): string {
   const h = hex.replace("#", "");
@@ -74,17 +66,23 @@ export default function PayPage() {
   const token = String(params.token ?? "");
   const [state, setState] = useState<PayState>("entry");
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [methods, setMethods] = useState<PosMethodOption[]>([]);
+  const [paymentReady, setPaymentReady] = useState(false);
+  const [limits, setLimits] = useState<PayLimits | null>(null);
   const [amount, setAmount] = useState(0);
   const [amountInput, setAmountInput] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [depositRef, setDepositRef] = useState("");
   const [depositToken, setDepositToken] = useState("");
+  const [renderMode, setRenderMode] = useState<PspRenderMode | null>(null);
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [publishableKey, setPublishableKey] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [progress, setProgress] = useState(20);
   const [payError, setPayError] = useState("");
   const [loadingInit, setLoadingInit] = useState(true);
+  const [stripeProcessing, setStripeProcessing] = useState(false);
 
   const brand = session?.brand ?? { color: "#2563EB", bg: "#F4F7FC", logo: null, name: "OnePOS" };
 
@@ -99,13 +97,27 @@ export default function PayPage() {
   }, [progress]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const dref = params.get("dref");
+    const dtoken = params.get("dtoken");
+    if (dref && dtoken) {
+      setDepositRef(dref);
+      setDepositToken(dtoken);
+      setState("pending");
+      setProgress(78);
+      setStripeProcessing(true);
+    }
+  }, []);
+
+  useEffect(() => {
     const load = async () => {
       try {
         const res = await fetch(`/backend/user/pos_methods?token=${encodeURIComponent(token)}`);
         const json = (await res.json()) as {
           success: boolean;
           message?: string;
-          data?: { session: SessionInfo; methods: PosMethodOption[] };
+          data?: { session: SessionInfo; payment_ready: boolean; limits: PayLimits | null };
         };
         if (!json.success || !json.data) {
           setPayError(json.message ?? "Oturum yüklenemedi");
@@ -114,15 +126,13 @@ export default function PayPage() {
           return;
         }
         setSession(json.data.session);
-        setMethods(json.data.methods);
+        setPaymentReady(json.data.payment_ready);
+        setLimits(json.data.limits);
         const fixed = json.data.session.amount;
         if (fixed > 0) {
           setAmount(fixed);
           setAmountInput(String(fixed));
         }
-        const defaultMethod =
-          json.data.methods.find((m) => m.isDefault) ?? json.data.methods[0] ?? null;
-        if (defaultMethod) setSelectedProvider(defaultMethod.provider);
       } catch {
         setPayError("Sunucuya ulaşılamıyor");
         setState("expired");
@@ -165,12 +175,32 @@ export default function PayPage() {
     return () => clearInterval(id);
   }, [state, depositRef, depositToken, pollStatus]);
 
-  const isMethodAvailable = (m: PosMethodOption) =>
-    effectiveAmount > 0 && effectiveAmount >= m.min && effectiveAmount <= m.max;
+  useEffect(() => {
+    if (state !== "pending" || renderMode !== "iframe" || provider !== "paytr" || !iframeUrl) return;
+
+    const script = document.createElement("script");
+    script.src = "https://www.paytr.com/js/iframeResizer.min.js";
+    script.async = true;
+    script.onload = () => {
+      const w = window as Window & { iFrameResize?: (opts: object, selector: string) => void };
+      w.iFrameResize?.({}, "#pay-psp-iframe");
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      script.remove();
+    };
+  }, [state, renderMode, provider, iframeUrl]);
+
+  const isAmountValid = useMemo(() => {
+    if (effectiveAmount <= 0) return false;
+    if (!limits) return paymentReady;
+    return effectiveAmount >= limits.min && effectiveAmount <= limits.max;
+  }, [effectiveAmount, limits, paymentReady]);
 
   const startPayment = async () => {
-    if (!selectedProvider) {
-      setPayError("Ödeme yöntemi seçin");
+    if (!paymentReady) {
+      setPayError("Ödeme altyapısı şu an kullanılamıyor");
       return;
     }
     const payAmount = session?.amount_editable ? Number(amountInput) : amount;
@@ -191,13 +221,22 @@ export default function PayPage() {
         body: JSON.stringify({
           session_token: token,
           amount: payAmount,
-          provider: selectedProvider,
         }),
       });
       const json = (await res.json()) as {
         success: boolean;
         message?: string;
-        data?: { reference: string; token: string; redirect_url?: string; amount: number };
+        data?: {
+          reference: string;
+          token: string;
+          amount: number;
+          redirect_url?: string | null;
+          render_mode?: PspRenderMode;
+          iframe_url?: string | null;
+          client_secret?: string | null;
+          publishable_key?: string | null;
+          provider?: string;
+        };
       };
       if (!json.success || !json.data) {
         setPayError(json.message ?? "Hata");
@@ -205,12 +244,19 @@ export default function PayPage() {
         setProgress(33);
         return;
       }
+      const mode = json.data.render_mode ?? (json.data.redirect_url ? "redirect" : "iframe");
       setDepositRef(json.data.reference);
       setDepositToken(json.data.token);
+      setRenderMode(mode);
+      setIframeUrl(json.data.iframe_url ?? null);
       setRedirectUrl(json.data.redirect_url ?? null);
+      setClientSecret(json.data.client_secret ?? null);
+      setPublishableKey(json.data.publishable_key ?? null);
+      setProvider(json.data.provider ?? null);
       setState("pending");
       setProgress(78);
-      if (json.data.redirect_url) {
+
+      if (mode === "redirect" && json.data.redirect_url) {
         window.location.href = json.data.redirect_url;
       }
     } catch {
@@ -219,6 +265,11 @@ export default function PayPage() {
       setProgress(33);
     }
   };
+
+  const stripeReturnUrl =
+    typeof window !== "undefined" && depositRef && depositToken
+      ? `${window.location.origin}/pay/${token}?dref=${encodeURIComponent(depositRef)}&dtoken=${encodeURIComponent(depositToken)}`
+      : "";
 
   const displayAmount = useMemo(() => formatAmount(effectiveAmount || 0), [effectiveAmount]);
 
@@ -277,7 +328,7 @@ export default function PayPage() {
             {!loadingInit && state === "entry" ? (
               <>
                 <p className="pay-intro">
-                  Tutarınızı onaylayın, kredi kartı sağlayıcısını seçin ve güvenli ödeme adımına geçin.
+                  Tutarınızı onaylayın ve güvenli ödeme adımına geçin.
                 </p>
 
                 {session?.amount_editable ? (
@@ -285,7 +336,8 @@ export default function PayPage() {
                     <div className="pay-section-title">Yatırım tutarı</div>
                     <Input
                       type="number"
-                      min={0}
+                      min={limits?.min ?? 0}
+                      max={limits?.max}
                       step={1}
                       value={amountInput}
                       onChange={(e) => {
@@ -296,50 +348,17 @@ export default function PayPage() {
                       aria-label="Yatırım tutarı"
                     />
                     <span className="pay-amount-suffix">₺</span>
+                    {limits ? (
+                      <p className="text-xs text-muted" style={{ marginTop: 8 }}>
+                        Limit: {limits.min.toLocaleString("tr-TR")} – {limits.max.toLocaleString("tr-TR")} ₺
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 
-                {methods.length > 0 ? (
-                  <div>
-                    <div className="pay-section-title">Ödeme yöntemi</div>
-                    <div className="pay-methods">
-                      {methods.map((m) => {
-                        const available = isMethodAvailable(m);
-                        const selected = selectedProvider === m.provider;
-                        return (
-                          <button
-                            key={m.provider}
-                            type="button"
-                            disabled={!available}
-                            className={`pay-method-card ${selected ? "selected" : ""}`}
-                            onClick={() => {
-                              setSelectedProvider(m.provider);
-                              setPayError("");
-                            }}
-                          >
-                            <div className="pay-method-icon">
-                              <Icon name="card" size={20} />
-                            </div>
-                            <div className="pay-method-body">
-                              <div className="pay-method-label">{m.label}</div>
-                              <div className="pay-method-range">
-                                {PROVIDER_HINT[m.provider] ?? "Kredi kartı"} ·{" "}
-                                {m.min.toLocaleString("tr-TR")} – {m.max.toLocaleString("tr-TR")} ₺
-                              </div>
-                            </div>
-                            <div className="pay-method-radio">
-                              <span className="pay-method-radio-dot" />
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                {methods.length === 0 ? (
+                {!paymentReady ? (
                   <div className="pay-alert pay-alert-error">
-                    Aktif ödeme yöntemi bulunamadı. Lütfen daha sonra tekrar deneyin.
+                    Ödeme altyapısı aktif değil. Lütfen daha sonra tekrar deneyin.
                   </div>
                 ) : null}
 
@@ -349,7 +368,7 @@ export default function PayPage() {
                   type="button"
                   className="pay-btn"
                   onClick={startPayment}
-                  disabled={methods.length === 0 || effectiveAmount <= 0}
+                  disabled={!paymentReady || !isAmountValid}
                 >
                   <Icon name="lock" size={16} />
                   Güvenli ödemeye geç
@@ -358,17 +377,62 @@ export default function PayPage() {
             ) : null}
 
             {state === "pending" ? (
-              <div className="pay-state">
-                <div className="pay-state-icon pay-state-icon--loading">
-                  <Spinner size="lg" />
-                </div>
-                <h2 className="pay-state-title">Ödeme işleniyor</h2>
-                <p className="pay-state-desc">
-                  {redirectUrl
-                    ? "3D Secure sayfasına yönlendiriliyorsunuz…"
-                    : "Banka doğrulaması bekleniyor. Bu pencereyi kapatmayın."}
-                </p>
-              </div>
+              <>
+                {renderMode === "iframe" && iframeUrl ? (
+                  <div className="pay-embed">
+                    <p className="pay-intro">Kart bilgilerinizi güvenli ödeme penceresinde girin.</p>
+                    <iframe
+                      id="pay-psp-iframe"
+                      src={iframeUrl}
+                      title="Güvenli ödeme"
+                      className="pay-embed-iframe"
+                      scrolling="no"
+                    />
+                  </div>
+                ) : null}
+
+                {renderMode === "stripe_elements" && stripeProcessing ? (
+                  <div className="pay-state">
+                    <div className="pay-state-icon pay-state-icon--loading">
+                      <Spinner size="lg" />
+                    </div>
+                    <h2 className="pay-state-title">Ödeme işleniyor</h2>
+                    <p className="pay-state-desc">Banka doğrulaması bekleniyor. Bu pencereyi kapatmayın.</p>
+                  </div>
+                ) : null}
+
+                {renderMode === "stripe_elements" && !stripeProcessing && clientSecret && publishableKey ? (
+                  <div className="pay-embed">
+                    <p className="pay-intro">Kart bilgilerinizi aşağıdaki güvenli formda girin.</p>
+                    {payError ? <div className="pay-alert pay-alert-error">{payError}</div> : null}
+                    <StripePaymentPanel
+                      clientSecret={clientSecret}
+                      publishableKey={publishableKey}
+                      returnUrl={stripeReturnUrl}
+                      onError={setPayError}
+                      onProcessing={() => setStripeProcessing(true)}
+                    />
+                  </div>
+                ) : null}
+
+                {renderMode === "redirect" || (!renderMode && !iframeUrl && !clientSecret) ? (
+                  <div className="pay-state">
+                    <div className="pay-state-icon pay-state-icon--loading">
+                      <Spinner size="lg" />
+                    </div>
+                    <h2 className="pay-state-title">Ödeme işleniyor</h2>
+                    <p className="pay-state-desc">
+                      {redirectUrl
+                        ? "3D Secure sayfasına yönlendiriliyorsunuz…"
+                        : "Banka doğrulaması bekleniyor. Bu pencereyi kapatmayın."}
+                    </p>
+                  </div>
+                ) : null}
+
+                {renderMode === "iframe" || renderMode === "stripe_elements" ? (
+                  <p className="pay-pending-note">Ödeme tamamlanana kadar bu sayfayı kapatmayın.</p>
+                ) : null}
+              </>
             ) : null}
 
             {state === "success" ? (

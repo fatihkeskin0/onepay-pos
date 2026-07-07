@@ -23,7 +23,6 @@ interface EditForm {
   min_amount: string;
   max_amount: string;
   sort_order: string;
-  is_default: boolean;
 }
 
 export default function PosSettingsPage() {
@@ -36,7 +35,6 @@ export default function PosSettingsPage() {
     min_amount: "50",
     max_amount: "100000",
     sort_order: "0",
-    is_default: false,
   });
   const { notify } = useToast();
 
@@ -64,7 +62,6 @@ export default function PosSettingsPage() {
       min_amount: String(m.minAmount),
       max_amount: String(m.maxAmount),
       sort_order: String(m.sortOrder),
-      is_default: m.isDefault,
     });
   };
 
@@ -78,7 +75,6 @@ export default function PosSettingsPage() {
         min_amount: Number(editForm.min_amount),
         max_amount: Number(editForm.max_amount),
         sort_order: Number(editForm.sort_order),
-        is_default: editForm.is_default,
       });
       notify("Kaydedildi", "success");
       setEditTarget(null);
@@ -103,7 +99,7 @@ export default function PosSettingsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">POS Ayarları</div>
-          <div className="page-sub">Ödeme yöntemleri, limitler ve varsayılan sağlayıcı</div>
+          <div className="page-sub">Aynı anda yalnızca 1 ödeme altyapısı aktif olabilir</div>
         </div>
       </div>
       <div className="table-wrap">
@@ -114,7 +110,6 @@ export default function PosSettingsPage() {
               <th>Etiket</th>
               <th>Min–Max (₺)</th>
               <th>Durum</th>
-              <th>Varsayılan</th>
               <th>Credentials</th>
               <th>İşlem</th>
             </tr>
@@ -122,7 +117,7 @@ export default function PosSettingsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7}>Yükleniyor...</td>
+                <td colSpan={6}>Yükleniyor...</td>
               </tr>
             ) : (
               items.map((m) => (
@@ -137,7 +132,6 @@ export default function PosSettingsPage() {
                       {m.enabled ? "Aktif" : "Pasif"}
                     </span>
                   </td>
-                  <td>{m.isDefault ? "Evet" : "—"}</td>
                   <td>
                     <span className={`badge ${m.configured ? "badge-blue" : "badge-yellow"}`}>
                       {m.configured ? "Yapılandırıldı" : "Eksik"}
@@ -148,7 +142,7 @@ export default function PosSettingsPage() {
                       Düzenle
                     </button>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => toggleMethod(m.provider)}>
-                      {m.enabled ? "Pasif" : "Aktif"}
+                      {m.enabled ? "Pasif yap" : "Aktif yap"}
                     </button>
                   </td>
                 </tr>
@@ -217,17 +211,7 @@ export default function PosSettingsPage() {
               checked={editForm.enabled}
               onChange={(e) => setEditForm({ ...editForm, enabled: e.target.checked })}
             />{" "}
-            Aktif
-          </label>
-        </div>
-        <div className="form-group">
-          <label className="form-label">
-            <input
-              type="checkbox"
-              checked={editForm.is_default}
-              onChange={(e) => setEditForm({ ...editForm, is_default: e.target.checked })}
-            />{" "}
-            Varsayılan yöntem
+            Aktif (diğer yöntemler otomatik kapanır)
           </label>
         </div>
         {editTarget && !editTarget.configured && (

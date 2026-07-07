@@ -9,8 +9,10 @@
     "watch": "tsc --watch --preserveWatchOutput",
     "generate": "prisma generate",
     "push": "dotenv -e ../../.env -- prisma db push",
-    "deploy": "prisma db push",
-    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "deploy": "prisma migrate deploy",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "seed:prod": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0"

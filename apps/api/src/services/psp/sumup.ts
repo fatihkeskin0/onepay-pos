@@ -12,6 +12,7 @@ interface SumUpCheckoutResponse {
 /** SumUp Checkouts API adapter */
 export class SumUpProvider implements PspProvider {
   name = "sumup" as const;
+  readonly renderMode = "redirect" as const;
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
     if (!config.psp.sumup.apiKey || !config.psp.sumup.merchantCode) {
@@ -47,6 +48,7 @@ export class SumUpProvider implements PspProvider {
 
       return {
         providerRef: data.id,
+        renderMode: this.renderMode,
         redirectUrl: `https://checkout.sumup.com/pay/${data.id}`,
         status: "initiated",
         rawResponse: data as Record<string, unknown>,
@@ -62,16 +64,45 @@ export class SumUpProvider implements PspProvider {
     _rawBody?: string,
   ): Promise<PspCallbackResult> {
     const data = body as Record<string, string>;
-    const checkoutRef = data.checkout_reference ?? data.reference ?? "";
-    const paid = (data.status ?? "").toUpperCase() === "PAID";
+    const checkoutId = data.id ?? data.checkout_id ?? "";
 
-    return {
-      valid: !!checkoutRef,
-      depositId: undefined,
-      providerRef: checkoutRef,
-      status: paid ? "paid" : "failed",
-      rawPayload: data,
-    };
+    if (!checkoutId || !config.psp.sumup.apiKey) {
+      return { valid: false, status: "failed" };
+    }
+
+    try {
+      const res = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
+        headers: { Authorization: `Bearer ${config.psp.sumup.apiKey}` },
+      });
+
+      if (!res.ok) {
+        return { valid: false, status: "failed" };
+      }
+
+      const checkout = (await res.json()) as {
+        status?: string;
+        checkout_reference?: string;
+        amount?: number;
+        currency?: string;
+      };
+
+      const status = (checkout.status ?? "").toUpperCase();
+      const paid = status === "PAID";
+      const failed = status === "FAILED" || status === "EXPIRED";
+
+      if (!paid && !failed) {
+        return { valid: false, status: "processing", rawPayload: checkout as Record<string, unknown> };
+      }
+
+      return {
+        valid: true,
+        providerRef: checkoutId,
+        status: paid ? "paid" : "failed",
+        rawPayload: checkout as Record<string, unknown>,
+      };
+    } catch {
+      return { valid: false, status: "failed" };
+    }
   }
 
   async getStatus(): Promise<"paid" | "failed" | "processing"> {

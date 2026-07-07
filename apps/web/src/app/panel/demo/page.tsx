@@ -96,14 +96,14 @@ export default function DemoPage() {
   return (
     <>
       <PageHeader
-        title="Kredi Kartı Ödeme Demo"
-        subtitle="Mock PSP ile uçtan uca ödeme akışını panelden test edin"
+        title="Ödeme Linki"
+        subtitle="Gerçek API akışıyla test ödeme oturumu oluşturun"
       />
 
       <div className="demo-grid">
         <Card title="Demo oturumu oluştur">
           <p className="demo-hint">
-            Seçilen site için gerçek API akışıyla ödeme linki üretilir. Mock POS aktif olmalıdır (
+            Seçilen site için gerçek API akışıyla ödeme linki üretilir. Aktif bir POS yöntemi gerekir (
             <Link href="/panel/pos">POS Ayarları</Link>).
           </p>
 
@@ -199,9 +199,9 @@ export default function DemoPage() {
 
       <Card title="Akış özeti" className="mt-4">
         <ol className="demo-steps">
-          <li>Demo link oluştur → müşteri ödeme sayfası açılır</li>
-          <li>Tutar ve Mock POS yöntemini seç → 3DS simülasyonuna yönlendirilir</li>
-          <li>Mock 3DS ekranında &quot;Başarılı öde&quot; → yatırım otomatik onaylanır</li>
+          <li>Ödeme linki oluştur → müşteri ödeme sayfası açılır</li>
+          <li>Tutar ve POS yöntemini seç → PSP ödeme ekranına yönlendirilir</li>
+          <li>Ödeme tamamlanır → yatırım otomatik onaylanır</li>
           <li>Sonucu <Link href="/panel/deposit">Yatırımlar</Link> ekranından takip edin</li>
         </ol>
       </Card>

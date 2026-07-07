@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { Prisma } from "@onepara/db";
 import { prisma } from "@onepara/db";
 
 export async function getWallet(userId: string) {
@@ -6,11 +7,11 @@ export async function getWallet(userId: string) {
 }
 
 export async function getOrCreateWallet(userId: string) {
-  let wallet = await getWallet(userId);
-  if (!wallet) {
-    wallet = await prisma.wallet.create({ data: { userId, balance: 0 } });
-  }
-  return wallet;
+  return prisma.wallet.upsert({
+    where: { userId },
+    create: { userId, balance: 0 },
+    update: {},
+  });
 }
 
 async function txExists(txId: string): Promise<boolean> {
@@ -18,16 +19,27 @@ async function txExists(txId: string): Promise<boolean> {
   return !!tx;
 }
 
-async function logTx(
+export async function creditWithTx(
+  tx: Prisma.TransactionClient,
   userId: string,
-  type: string,
   amount: number,
   txId: string,
-  status: "completed" | "rolled_back",
-): Promise<void> {
-  await prisma.transaction.create({
-    data: { userId, type, amount, bcTxId: txId, status },
+  type = "credit",
+): Promise<boolean> {
+  const existing = await tx.transaction.findUnique({ where: { bcTxId: txId } });
+  if (existing) return false;
+
+  await tx.wallet.upsert({
+    where: { userId },
+    create: { userId, balance: amount },
+    update: { balance: { increment: amount } },
   });
+
+  await tx.transaction.create({
+    data: { userId, type, amount, bcTxId: txId, status: "completed" },
+  });
+
+  return true;
 }
 
 export async function credit(
@@ -40,17 +52,7 @@ export async function credit(
 
   await getOrCreateWallet(userId);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.wallet.update({
-      where: { userId },
-      data: { balance: { increment: amount } },
-    });
-    await tx.transaction.create({
-      data: { userId, type, amount, bcTxId: txId, status: "completed" },
-    });
-  });
-
-  return true;
+  return prisma.$transaction(async (tx) => creditWithTx(tx, userId, amount, txId, type));
 }
 
 export async function debit(

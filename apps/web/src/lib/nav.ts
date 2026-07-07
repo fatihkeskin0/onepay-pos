@@ -20,7 +20,6 @@ export const PAGE_HREF: Record<string, string> = {
   "kas-duyurular": "/panel/announcements",
   "adm-ayarlar": "/panel/settings",
   "kas-sifre": "/panel/settings",
-  "adm-test": "/panel/test",
   "adm-demo": "/panel/demo",
   "adm-pos": "/panel/pos",
 };

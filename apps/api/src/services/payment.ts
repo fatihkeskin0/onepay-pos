@@ -1,5 +1,5 @@
 import { prisma } from "@onepara/db";
-import { credit, generateRef, generateToken } from "./wallet.js";
+import { creditWithTx, generateRef, generateToken } from "./wallet.js";
 
 export async function createDeposit(
   userId: string,
@@ -49,10 +49,9 @@ export async function approveDeposit(
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    await credit(deposit.userId, Number(deposit.amount), `DEP-${depositId}`, "deposit");
-    await tx.deposit.update({
-      where: { id: depositId },
+  const approved = await prisma.$transaction(async (tx) => {
+    const updated = await tx.deposit.updateMany({
+      where: { id: depositId, status: "pending" },
       data: {
         status: "approved",
         cashierId,
@@ -61,8 +60,26 @@ export async function approveDeposit(
         commissionAmount,
       },
     });
+
+    if (updated.count !== 1) return false;
+
+    const credited = await creditWithTx(
+      tx,
+      deposit.userId,
+      Number(deposit.amount),
+      `DEP-${depositId}`,
+      "deposit",
+    );
+
+    if (!credited) {
+      const existing = await tx.transaction.findUnique({ where: { bcTxId: `DEP-${depositId}` } });
+      if (!existing) return false;
+    }
+
+    return true;
   });
 
+  if (!approved) return null;
   return getDeposit(depositId);
 }
 
@@ -71,11 +88,8 @@ export async function rejectDeposit(
   cashierId: number,
   reason = "",
 ): Promise<Awaited<ReturnType<typeof getDeposit>>> {
-  const deposit = await getDeposit(depositId);
-  if (!deposit || deposit.status !== "pending") return null;
-
-  await prisma.deposit.update({
-    where: { id: depositId },
+  const updated = await prisma.deposit.updateMany({
+    where: { id: depositId, status: "pending" },
     data: {
       status: "rejected",
       cashierId,
@@ -84,6 +98,23 @@ export async function rejectDeposit(
     },
   });
 
+  if (updated.count !== 1) return null;
+  return getDeposit(depositId);
+}
+
+export async function cancelDeposit(
+  depositId: number,
+  reason: string,
+): Promise<Awaited<ReturnType<typeof getDeposit>>> {
+  const updated = await prisma.deposit.updateMany({
+    where: { id: depositId, status: "pending" },
+    data: {
+      status: "cancelled",
+      rejectReason: reason,
+    },
+  });
+
+  if (updated.count !== 1) return null;
   return getDeposit(depositId);
 }
 

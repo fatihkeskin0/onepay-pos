@@ -1,5 +1,7 @@
 import type { PspProviderName } from "@onepara/shared";
 
+export type PspRenderMode = "redirect" | "iframe" | "stripe_elements";
+
 export interface PspPaymentInput {
   depositId: number;
   reference: string;
@@ -15,7 +17,11 @@ export interface PspPaymentInput {
 
 export interface PspPaymentResult {
   providerRef: string;
+  renderMode: PspRenderMode;
   redirectUrl?: string;
+  iframeUrl?: string;
+  clientSecret?: string;
+  publishableKey?: string;
   status: "initiated" | "processing" | "paid" | "failed";
   rawResponse?: Record<string, unknown>;
 }
@@ -30,6 +36,7 @@ export interface PspCallbackResult {
 
 export interface PspProvider {
   name: PspProviderName;
+  readonly renderMode: PspRenderMode;
   createPayment(input: PspPaymentInput): Promise<PspPaymentResult>;
   verifyCallback(
     body: unknown,

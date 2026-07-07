@@ -11,17 +11,45 @@ import { pspRoutes } from "./routes/psp.js";
 import { bcRoutes } from "./routes/bc.js";
 import { prisma } from "@onepara/db";
 import { connectRedis, pingRedis } from "./services/redis.js";
+import { depositCancelled, depositUrl, getSiteCallback } from "./services/callback.js";
+
+async function notifyDepositCancelled(depositId: number): Promise<void> {
+  const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+  if (!deposit?.siteId) return;
+
+  const siteCb = await getSiteCallback(deposit.siteId);
+  if (!siteCb) return;
+
+  const url = depositUrl(siteCb);
+  if (url) {
+    await depositCancelled(deposit, siteCb.apiKey, url);
+  }
+}
 
 async function autoCancelDeposits(): Promise<void> {
   const now = new Date();
 
-  await prisma.deposit.updateMany({
+  const staleDeposits = await prisma.deposit.findMany({
     where: {
       status: "pending",
       createdAt: { lt: new Date(now.getTime() - 35 * 60 * 1000) },
     },
-    data: { status: "cancelled", rejectReason: "Süre aşımı: kullanıcı ödeme yapmadı" },
+    select: { id: true },
   });
+
+  if (staleDeposits.length > 0) {
+    await prisma.deposit.updateMany({
+      where: {
+        id: { in: staleDeposits.map((d) => d.id) },
+        status: "pending",
+      },
+      data: { status: "cancelled", rejectReason: "Süre aşımı: kullanıcı ödeme yapmadı" },
+    });
+
+    for (const row of staleDeposits) {
+      await notifyDepositCancelled(row.id);
+    }
+  }
 
   const expiredSessions = await prisma.paymentSession.findMany({
     where: { expiresAt: { lt: now }, depositRef: { not: null } },
@@ -29,14 +57,28 @@ async function autoCancelDeposits(): Promise<void> {
 
   for (const session of expiredSessions) {
     if (!session.depositRef) continue;
+
+    const pending = await prisma.deposit.findMany({
+      where: { reference: session.depositRef, status: "pending" },
+      select: { id: true },
+    });
+
+    if (pending.length === 0) continue;
+
     await prisma.deposit.updateMany({
       where: { reference: session.depositRef, status: "pending" },
       data: { status: "cancelled", rejectReason: "Süre aşımı: ödeme süresi doldu" },
     });
+
+    for (const row of pending) {
+      await notifyDepositCancelled(row.id);
+    }
   }
 }
 
-const app = Fastify({ logger: config.app.env === "development" });
+const app = Fastify({
+  logger: config.app.env === "development" ? true : { level: process.env.LOG_LEVEL ?? "info" },
+});
 
 await app.register(cors, {
   origin: config.app.env === "development" ? true : config.api.corsOrigin,
@@ -61,9 +103,19 @@ app.setErrorHandler((err, _request, reply) => {
   }
 });
 
-app.get("/health", async () => {
+app.get("/health", async (_request, reply) => {
+  let dbOk = false;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbOk = true;
+  } catch {
+    dbOk = false;
+  }
+
   const redisOk = await pingRedis();
-  return { ok: true, redis: redisOk };
+  const okHealth = dbOk && redisOk;
+
+  reply.status(okHealth ? 200 : 503).send({ ok: okHealth, db: dbOk, redis: redisOk });
 });
 
 await app.register(userRoutes, { prefix: "/user" });

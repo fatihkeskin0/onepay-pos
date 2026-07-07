@@ -24,7 +24,7 @@ export default function ReconciliationPage() {
   const { notify } = useToast();
 
   const [form, setForm] = useState({
-    provider: "mock",
+    provider: "stripe",
     period_start: "",
     period_end: "",
     gross_amount: "",
@@ -142,7 +142,6 @@ export default function ReconciliationPage() {
             value={form.provider}
             onChange={(e) => setForm({ ...form, provider: e.target.value })}
           >
-            <option value="mock">Mock</option>
             <option value="paytr">PayTR</option>
             <option value="stripe">Stripe</option>
             <option value="sumup">SumUp</option>

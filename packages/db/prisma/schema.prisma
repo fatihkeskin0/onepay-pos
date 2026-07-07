@@ -186,7 +186,8 @@ model PaymentSession {
   externalId   String?  @map("external_id") @db.VarChar(128)
   site         Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@index([token])
+  @@index([depositRef, depositToken])
+  @@index([expiresAt])
   @@map("payment_sessions")
 }
 
@@ -230,6 +231,7 @@ model PspTransaction {
 
   @@index([depositId])
   @@index([providerRef])
+  @@index([provider, providerRef])
   @@map("psp_transactions")
 }
 

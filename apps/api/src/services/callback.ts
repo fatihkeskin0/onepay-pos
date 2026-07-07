@@ -58,7 +58,9 @@ export async function fireCallback(
       body: JSON.stringify(fullPayload),
       signal: AbortSignal.timeout(10_000),
     });
-    console.log(`[Callback] url=${url} http=${res.status} payload=${JSON.stringify(fullPayload)}`);
+    console.log(
+      `[Callback] url=${url} http=${res.status} deposit=${String(payload.TransactionID ?? "")} status=${String(payload.StatusCode ?? "")}`,
+    );
   } catch (e) {
     console.error("[Callback] Exception:", e);
   }
@@ -98,6 +100,28 @@ export async function depositRejected(
     Amount: deposit.amount,
     StatusCode: 2,
     StatusMessage: deposit.rejectReason || "Yatırım talebi reddedildi.",
+    CustomField: deposit.externalId ?? "",
+  });
+}
+
+export async function depositCancelled(
+  deposit: {
+    id: number;
+    userId: string;
+    amount: { toString(): string };
+    externalId?: string | null;
+    rejectReason?: string | null;
+  },
+  apiKey: string,
+  callbackUrl: string,
+): Promise<void> {
+  await fireCallback(callbackUrl, apiKey, {
+    TraderKey: apiKey,
+    TransactionID: deposit.id,
+    UserCode: deposit.userId,
+    Amount: deposit.amount,
+    StatusCode: 3,
+    StatusMessage: deposit.rejectReason || "Yatırım talebi iptal edildi.",
     CustomField: deposit.externalId ?? "",
   });
 }

@@ -7,6 +7,7 @@ export async function checkRateLimit(
   max: number,
   windowSec: number,
   reply: Parameters<typeof error>[0],
+  failClosed = true,
 ): Promise<boolean> {
   const redisKey = `ratelimit:${key}`;
 
@@ -28,6 +29,10 @@ export async function checkRateLimit(
     return true;
   } catch (err) {
     console.error("[rate-limit] Redis error:", err);
+    if (failClosed) {
+      error(reply, "Servis geçici olarak kullanılamıyor", 503);
+      return false;
+    }
     return true;
   }
 }
@@ -46,6 +51,7 @@ export async function byIp(
   max: number,
   windowSec: number,
   reply: Parameters<typeof error>[0],
+  failClosed = true,
 ): Promise<boolean> {
-  return checkRateLimit(`ip:${getClientIp(request)}:${suffix}`, max, windowSec, reply);
+  return checkRateLimit(`ip:${getClientIp(request)}:${suffix}`, max, windowSec, reply, failClosed);
 }

@@ -2,8 +2,16 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../src/index.js";
 
 async function main() {
-  const adminHash = await bcrypt.hash("admin123", 10);
-  const agentHash = await bcrypt.hash("agent123", 10);
+  const appEnv = process.env.APP_ENV ?? "development";
+  if (appEnv === "production" && process.env.SEED_ALLOW !== "1") {
+    console.error("Seed blocked in production. Set SEED_ALLOW=1 to override.");
+    process.exit(1);
+  }
+
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "admin123";
+  const agentPassword = process.env.SEED_AGENT_PASSWORD ?? "agent123";
+  const adminHash = await bcrypt.hash(adminPassword, 12);
+  const agentHash = await bcrypt.hash(agentPassword, 12);
 
   const site = await prisma.site.upsert({
     where: { apiKey: "dev_site_api_key_00000000000000000000000000000001" },
@@ -49,7 +57,6 @@ async function main() {
 
   const settings = [
     ["chat_enabled", "1"],
-    ["psp_default_provider", "mock"],
     ["telegram_notify_deposit", "1"],
     ["usd_rate", "34.50"],
   ] as const;
@@ -63,10 +70,9 @@ async function main() {
   }
 
   const posMethods = [
-    { provider: "mock", label: "Mock (Dev)", enabled: true, isDefault: true, minAmount: 50, maxAmount: 100000, sortOrder: 0 },
-    { provider: "paytr", label: "PayTR", enabled: false, isDefault: false, minAmount: 50, maxAmount: 50000, sortOrder: 1 },
-    { provider: "stripe", label: "Stripe", enabled: false, isDefault: false, minAmount: 100, maxAmount: 100000, sortOrder: 2 },
-    { provider: "sumup", label: "SumUp", enabled: false, isDefault: false, minAmount: 50, maxAmount: 25000, sortOrder: 3 },
+    { provider: "paytr", label: "PayTR", enabled: false, isDefault: false, minAmount: 50, maxAmount: 50000, sortOrder: 0 },
+    { provider: "stripe", label: "Stripe", enabled: false, isDefault: false, minAmount: 100, maxAmount: 100000, sortOrder: 1 },
+    { provider: "sumup", label: "SumUp", enabled: false, isDefault: false, minAmount: 50, maxAmount: 25000, sortOrder: 2 },
   ] as const;
 
   for (const pm of posMethods) {
@@ -78,8 +84,9 @@ async function main() {
   }
 
   console.log("Seed complete:", { siteId: site.id, adminId: admin.id, agentId: agent.id });
-  console.log("Login: admin / admin123, agent / agent123");
-  console.log("Site API key:", site.apiKey);
+  if (appEnv !== "production") {
+    console.log("Dev login: admin / (SEED_ADMIN_PASSWORD or admin123)");
+  }
 }
 
 main()

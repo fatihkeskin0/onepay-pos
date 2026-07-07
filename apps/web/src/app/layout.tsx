@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "OnePOS — Kredi Kartı Panel",
-  description: "OnePOS credit card deposit panel",
+  title: "OnePOS — Güvenli Ödeme Altyapısı",
+  description: "Kredi kartı POS altyapısı — 3D Secure, 256-bit SSL, PSP entegrasyonu",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

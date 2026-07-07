@@ -40,7 +40,7 @@ services:
       API_PORT: 4105
       API_PUBLIC_URL: http://localhost:4105
       CORS_ORIGIN: http://localhost:3105
-      PSP_DEFAULT_PROVIDER: mock
+      PSP_DEFAULT_PROVIDER: stripe
     ports:
       - "4105:4105"
     depends_on:

@@ -11,7 +11,8 @@
     "db:generate": "pnpm --filter @onepara/db generate",
     "db:push": "pnpm --filter @onepara/db push",
     "db:seed": "pnpm --filter @onepara/db seed",
-    "db:deploy": "pnpm --filter @onepara/db exec prisma db push"
+    "db:seed:prod": "pnpm --filter @onepara/db seed:prod",
+    "db:deploy": "pnpm --filter @onepara/db deploy"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

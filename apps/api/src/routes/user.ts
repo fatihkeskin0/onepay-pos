@@ -4,13 +4,15 @@ import { prisma, type Prisma } from "@onepara/db";
 import { config } from "../config.js";
 import { requireSite } from "../services/site-auth.js";
 import { ok, error } from "../services/response.js";
-import { createDeposit } from "../services/payment.js";
-import { notifyDeposit } from "../services/callback.js";
+import { createDeposit, cancelDeposit } from "../services/payment.js";
+import { depositCancelled, depositUrl, getSiteCallback, notifyDeposit } from "../services/callback.js";
+import { byIp } from "../services/rate-limit.js";
 import {
-  getEnabledPosMethodsForSite,
+  getActivePosMethodForSite,
   resolvePosProvider,
   validateAmountForMethod,
 } from "../services/pos-methods.js";
+import { buildPspEmbedPayload, extractPspEmbedFields } from "../services/psp/embed-response.js";
 
 async function loadSessionByToken(token: string) {
   return prisma.paymentSession.findFirst({
@@ -19,8 +21,23 @@ async function loadSessionByToken(token: string) {
   });
 }
 
+async function notifySiteCancelled(depositId: number): Promise<void> {
+  const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+  if (!deposit?.siteId) return;
+
+  const siteCb = await getSiteCallback(deposit.siteId);
+  if (!siteCb) return;
+
+  const url = depositUrl(siteCb);
+  if (url) {
+    await depositCancelled(deposit, siteCb.apiKey, url);
+  }
+}
+
 export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.post("/create_payment_link", async (request, reply) => {
+    if (!(await byIp(request, "create-link", 60, 60, reply))) return;
+
     const site = await requireSite(request, reply);
     if (!site) return;
 
@@ -66,6 +83,8 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/pos_methods", async (request, reply) => {
+    if (!(await byIp(request, "pos-methods", 120, 60, reply))) return;
+
     const token = String((request.query as { token?: string }).token ?? "");
     if (!token) {
       error(reply, "token gerekli", 422);
@@ -83,7 +102,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const methods = await getEnabledPosMethodsForSite(Number(session.site.minDeposit));
+    const active = await getActivePosMethodForSite(Number(session.site.minDeposit));
     const fixedAmount = Number(session.amount);
 
     ok(reply, {
@@ -100,11 +119,14 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           name: session.site.name,
         },
       },
-      methods,
+      payment_ready: active != null,
+      limits: active ? { min: active.min, max: active.max } : null,
     });
   });
 
   app.post("/create_deposit", async (request, reply) => {
+    if (!(await byIp(request, "create-deposit", 30, 60, reply))) return;
+
     const body = request.body as Record<string, unknown>;
     const sessionToken = body.session_token ? String(body.session_token) : null;
 
@@ -124,9 +146,6 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const site = sessionWithSite.site;
-    let userId = String(body.user_id ?? sessionWithSite.userId);
-    let amount = Number(body.amount ?? 0);
-    const requestedProvider = body.provider ? String(body.provider) : null;
     const session = sessionWithSite;
 
     if (session.expiresAt < new Date()) {
@@ -134,25 +153,57 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (session.depositRef && session.depositToken) {
-      const existing = await prisma.deposit.findFirst({
-        where: { reference: session.depositRef, token: session.depositToken },
-        include: { pspTransactions: { orderBy: { createdAt: "desc" }, take: 1 } },
-      });
-      if (existing) {
-        const pspTx = existing.pspTransactions[0];
-        ok(reply, {
-          reference: existing.reference,
-          token: existing.token,
-          amount: existing.amount,
-          redirect_url: pspTx?.redirectUrl ?? null,
-          provider: existing.pspProvider,
+    const locked = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM payment_sessions WHERE id = ${session.id} FOR UPDATE`;
+
+      const freshSession = await tx.paymentSession.findUnique({ where: { id: session.id } });
+      if (!freshSession) return { type: "invalid" as const };
+
+      if (freshSession.depositRef && freshSession.depositToken) {
+        const existing = await tx.deposit.findFirst({
+          where: { reference: freshSession.depositRef, token: freshSession.depositToken },
+          include: { pspTransactions: { orderBy: { createdAt: "desc" }, take: 1 } },
         });
-        return;
+
+        if (
+          existing &&
+          existing.status === "pending" &&
+          existing.pspTransactions[0]?.status === "initiated"
+        ) {
+          return { type: "existing" as const, deposit: existing };
+        }
+
+        if (existing) {
+          await tx.paymentSession.update({
+            where: { id: session.id },
+            data: { depositRef: null, depositToken: null },
+          });
+        }
       }
+
+      return { type: "create" as const };
+    });
+
+    if (locked.type === "invalid") {
+      error(reply, "Geçersiz oturum", 404);
+      return;
     }
 
-    userId = session.userId;
+    if (locked.type === "existing") {
+      const pspTx = locked.deposit.pspTransactions[0];
+      const embed = extractPspEmbedFields(pspTx);
+      ok(reply, {
+        reference: locked.deposit.reference,
+        token: locked.deposit.token,
+        amount: locked.deposit.amount,
+        provider: locked.deposit.pspProvider,
+        ...embed,
+      });
+      return;
+    }
+
+    const userId = session.userId;
+    let amount = Number(body.amount ?? 0);
     const sessionAmount = Number(session.amount);
     if (sessionAmount > 0) {
       amount = sessionAmount;
@@ -161,7 +212,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const resolved = await resolvePosProvider(requestedProvider, Number(site.minDeposit));
+    const resolved = await resolvePosProvider(null, Number(site.minDeposit));
     if (!resolved) {
       error(reply, "Aktif POS yöntemi bulunamadı", 503);
       return;
@@ -185,7 +236,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const pending = await prisma.deposit.findFirst({
-      where: { userId, siteId: site.id, status: "pending" },
+      where: {
+        userId,
+        siteId: site.id,
+        status: "pending",
+        pspTransactions: { some: { status: "initiated" } },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -207,69 +263,82 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       provider.name,
     );
 
-    const pspResult = await provider.createPayment({
-      depositId: id,
-      reference,
-      amount,
-      userId,
-      userName: session.userName,
-      siteName: site.name,
-      returnUrl: session.returnUrl || `${config.app.paymentUrl}/pay/${sessionToken}`,
-      callbackUrl: `${config.api.publicUrl}/psp/${provider.name}/callback`,
-      userIp: request.ip ?? "127.0.0.1",
-      email: `${userId}@${site.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "site"}.pay`,
-    });
-
-    await prisma.pspTransaction.create({
-      data: {
+    try {
+      const pspResult = await provider.createPayment({
         depositId: id,
-        provider: provider.name,
-        providerRef: pspResult.providerRef,
-        status: "initiated",
+        reference,
         amount,
-        redirectUrl: pspResult.redirectUrl ?? null,
-        rawResponse: (pspResult.rawResponse ?? undefined) as Prisma.InputJsonValue | undefined,
-      },
-    });
-
-    await prisma.deposit.update({
-      where: { id },
-      data: { pspRef: pspResult.providerRef },
-    });
-
-    await prisma.paymentSession.update({
-      where: { id: session.id },
-      data: { depositRef: reference, depositToken: depToken, amount },
-    });
-
-    const recentCount = await prisma.deposit.count({
-      where: {
         userId,
-        siteId: site.id,
-        createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
-      },
-    });
+        userName: session.userName,
+        siteName: site.name,
+        returnUrl: session.returnUrl || `${config.app.paymentUrl}/pay/${sessionToken}`,
+        callbackUrl: `${config.api.publicUrl}/psp/${provider.name}/callback`,
+        userIp: request.ip ?? "127.0.0.1",
+        email: `${userId}@${site.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "site"}.pay`,
+      });
 
-    if (recentCount >= 3) {
+      const embedStore = buildPspEmbedPayload(pspResult);
+
+      await prisma.pspTransaction.create({
+        data: {
+          depositId: id,
+          provider: provider.name,
+          providerRef: pspResult.providerRef,
+          status: "initiated",
+          amount,
+          redirectUrl: embedStore.redirectUrl,
+          rawResponse: embedStore.rawResponse as Prisma.InputJsonValue,
+        },
+      });
+
       await prisma.deposit.update({
         where: { id },
-        data: { isSuspicious: true, suspiciousReason: "10 dk içinde 3+ deneme" },
+        data: { pspRef: pspResult.providerRef },
       });
+
+      await prisma.paymentSession.update({
+        where: { id: session.id },
+        data: { depositRef: reference, depositToken: depToken, amount },
+      });
+
+      const recentCount = await prisma.deposit.count({
+        where: {
+          userId,
+          siteId: site.id,
+          createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+        },
+      });
+
+      if (recentCount >= 3) {
+        await prisma.deposit.update({
+          where: { id },
+          data: { isSuspicious: true, suspiciousReason: "10 dk içinde 3+ deneme" },
+        });
+      }
+
+      const deposit = await prisma.deposit.findUnique({ where: { id } });
+      if (deposit) await notifyDeposit(deposit, site.name);
+
+      ok(reply, {
+        reference,
+        token: depToken,
+        amount,
+        redirect_url: pspResult.redirectUrl ?? null,
+        provider: provider.name,
+        render_mode: pspResult.renderMode,
+        iframe_url: pspResult.iframeUrl ?? null,
+        client_secret: pspResult.clientSecret ?? null,
+        publishable_key: pspResult.publishableKey ?? null,
+      });
+    } catch (e) {
+      await cancelDeposit(id, "PSP başlatılamadı");
+      error(reply, e instanceof Error ? e.message : "PSP hatası", 502);
     }
-
-    const deposit = await prisma.deposit.findUnique({ where: { id } });
-    if (deposit) await notifyDeposit(deposit, site.name);
-
-    ok(reply, {
-      reference,
-      token: depToken,
-      amount,
-      redirect_url: pspResult.redirectUrl,
-      provider: provider.name,
-    });
   });
 
   app.get("/deposit_status", async (request, reply) => {
+    if (!(await byIp(request, "deposit-status", 120, 60, reply))) return;
+
     const query = request.query as Record<string, string>;
     const ref = query.ref;
     const token = query.token;
@@ -297,14 +366,17 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       if (session?.expiresAt) {
         remainingSeconds = Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000));
         if (remainingSeconds === 0) {
-          await prisma.deposit.update({
-            where: { id: deposit.id },
-            data: { status: "cancelled", rejectReason: "Süre aşımı: ödeme süresi doldu" },
-          });
-          deposit.status = "cancelled";
+          const cancelled = await cancelDeposit(deposit.id, "Süre aşımı: ödeme süresi doldu");
+          if (cancelled) {
+            await notifySiteCancelled(deposit.id);
+            deposit.status = "cancelled";
+          }
         }
       }
     }
+
+    const pspTx = deposit.pspTransactions[0];
+    const embed = extractPspEmbedFields(pspTx);
 
     ok(reply, {
       status: deposit.status,
@@ -312,8 +384,8 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       reference: deposit.reference,
       reject_reason: deposit.rejectReason,
       remaining_seconds: remainingSeconds,
-      redirect_url: deposit.pspTransactions[0]?.redirectUrl ?? null,
       provider: deposit.pspProvider,
+      ...embed,
       brand: deposit.site
         ? {
             color: deposit.site.brandColor,
@@ -326,6 +398,8 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/cancel_deposit", async (request, reply) => {
+    if (!(await byIp(request, "cancel-deposit", 30, 60, reply))) return;
+
     const body = request.body as Record<string, string>;
     const ref = body.ref;
     const token = body.token;
@@ -341,20 +415,22 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (deposit.status !== "pending") {
+    const cancelled = await cancelDeposit(deposit.id, "Kullanıcı iptal etti");
+    if (!cancelled) {
       error(reply, "İptal edilemez", 409);
       return;
     }
 
-    await prisma.deposit.update({
-      where: { id: deposit.id },
-      data: { status: "cancelled", rejectReason: "Kullanıcı iptal etti" },
-    });
-
+    await notifySiteCancelled(deposit.id);
     ok(reply, { cancelled: true });
   });
 
   app.get("/history", async (request, reply) => {
+    const site = await requireSite(request, reply);
+    if (!site) return;
+
+    if (!(await byIp(request, "user-history", 60, 60, reply))) return;
+
     const query = request.query as Record<string, string>;
     const userId = query.user_id;
     const page = Math.max(1, Number(query.page ?? 1));

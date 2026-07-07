@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "../../config.js";
 import type { PspCallbackResult, PspPaymentInput, PspPaymentResult, PspProvider } from "./types.js";
 
+const WEBHOOK_TOLERANCE_SEC = 300;
+
 function verifyStripeSignature(rawBody: string, sigHeader: string, secret: string): boolean {
   const parts: Record<string, string[]> = {};
   for (const item of sigHeader.split(",")) {
@@ -17,6 +19,12 @@ function verifyStripeSignature(rawBody: string, sigHeader: string, secret: strin
   const signatures = parts["v1"] ?? [];
   if (!timestamp || signatures.length === 0) return false;
 
+  const timestampSec = Number.parseInt(timestamp, 10);
+  if (!Number.isFinite(timestampSec)) return false;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - timestampSec) > WEBHOOK_TOLERANCE_SEC) return false;
+
   const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
 
   return signatures.some((sig) => {
@@ -28,50 +36,47 @@ function verifyStripeSignature(rawBody: string, sigHeader: string, secret: strin
   });
 }
 
-/** Stripe Checkout Session adapter */
+/** Stripe PaymentIntent + Payment Element adapter */
 export class StripeProvider implements PspProvider {
   name = "stripe" as const;
+  readonly renderMode = "stripe_elements" as const;
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
-    if (!config.psp.stripe.secretKey) {
+    if (!config.psp.stripe.secretKey || !config.psp.stripe.publishableKey) {
       throw new Error("Stripe credentials not configured");
     }
 
-    const successUrl = `${input.returnUrl}${input.returnUrl.includes("?") ? "&" : "?"}ref=${encodeURIComponent(input.reference)}&status=success`;
-    const cancelUrl = `${input.returnUrl}${input.returnUrl.includes("?") ? "&" : "?"}ref=${encodeURIComponent(input.reference)}&status=cancel`;
-
     try {
-      const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      const res = await fetch("https://api.stripe.com/v1/payment_intents", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.psp.stripe.secretKey}`,
           "Content-Type": "application/x-www-form-urlencoded",
+          "Idempotency-Key": `dep_${input.depositId}_${input.reference}`,
         },
         body: new URLSearchParams({
-          mode: "payment",
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-          "line_items[0][price_data][currency]": "try",
-          "line_items[0][price_data][product_data][name]": `Deposit ${input.reference}`,
-          "line_items[0][price_data][unit_amount]": String(Math.round(input.amount * 100)),
-          "line_items[0][quantity]": "1",
+          amount: String(Math.round(input.amount * 100)),
+          currency: "try",
+          "automatic_payment_methods[enabled]": "true",
           "metadata[deposit_id]": String(input.depositId),
         }),
       });
 
       const data = (await res.json()) as {
         id?: string;
-        url?: string;
+        client_secret?: string;
         error?: { message?: string };
       };
 
-      if (!res.ok || !data.id) {
-        throw new Error(data.error?.message ?? "Stripe session creation failed");
+      if (!res.ok || !data.id || !data.client_secret) {
+        throw new Error(data.error?.message ?? "Stripe PaymentIntent creation failed");
       }
 
       return {
         providerRef: data.id,
-        redirectUrl: data.url,
+        renderMode: this.renderMode,
+        clientSecret: data.client_secret,
+        publishableKey: config.psp.stripe.publishableKey,
         status: "initiated",
         rawResponse: data as Record<string, unknown>,
       };
@@ -101,23 +106,59 @@ export class StripeProvider implements PspProvider {
 
     const event = JSON.parse(rawBody) as {
       type?: string;
-      data?: { object?: { metadata?: { deposit_id?: string }; payment_status?: string; id?: string } };
+      data?: {
+        object?: {
+          metadata?: { deposit_id?: string };
+          id?: string;
+          amount?: number;
+          currency?: string;
+        };
+      };
     };
 
     const obj = event.data?.object;
     const depositId = Number(obj?.metadata?.deposit_id ?? 0);
-    const paid = event.type === "checkout.session.completed" && obj?.payment_status === "paid";
+    const providerRef = obj?.id;
 
-    return {
-      valid: paid && depositId > 0,
-      depositId: paid ? depositId : undefined,
-      providerRef: obj?.id,
-      status: paid ? "paid" : "failed",
-      rawPayload: event as Record<string, unknown>,
-    };
+    if (event.type === "payment_intent.succeeded" && depositId > 0) {
+      return {
+        valid: true,
+        depositId,
+        providerRef,
+        status: "paid",
+        rawPayload: event as Record<string, unknown>,
+      };
+    }
+
+    if (event.type === "payment_intent.payment_failed" && depositId > 0) {
+      return {
+        valid: true,
+        depositId,
+        providerRef,
+        status: "failed",
+        rawPayload: event as Record<string, unknown>,
+      };
+    }
+
+    return { valid: false, status: "failed", rawPayload: event as Record<string, unknown> };
   }
 
-  async getStatus(): Promise<"paid" | "failed" | "processing"> {
-    return "processing";
+  async getStatus(providerRef: string): Promise<"paid" | "failed" | "processing"> {
+    if (!config.psp.stripe.secretKey || !providerRef) return "processing";
+
+    try {
+      const res = await fetch(`https://api.stripe.com/v1/payment_intents/${providerRef}`, {
+        headers: { Authorization: `Bearer ${config.psp.stripe.secretKey}` },
+      });
+
+      if (!res.ok) return "processing";
+
+      const data = (await res.json()) as { status?: string };
+      if (data.status === "succeeded") return "paid";
+      if (data.status === "canceled") return "failed";
+      return "processing";
+    } catch {
+      return "processing";
+    }
   }
 }

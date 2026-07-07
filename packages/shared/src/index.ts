@@ -72,8 +72,7 @@ export const ADMIN_NAV: NavItem[] = [
   { section: "Güvenlik", id: "adm-supheliler", label: "Şüpheli İşlemler", icon: "⚠️", badge: "nav-badge-supheli" },
   { section: "Sistem", id: "adm-duyurular", label: "Duyurular", icon: "📢" },
   { section: "Sistem", id: "adm-ayarlar", label: "Ayarlar", icon: "⚙️" },
-  { section: "Sistem", id: "adm-demo", label: "Ödeme Demo", icon: "💳" },
-  { section: "Sistem", id: "adm-test", label: "Test İşlemleri", icon: "🧪", devOnly: true },
+  { section: "Sistem", id: "adm-demo", label: "Ödeme Linki", icon: "💳" },
 ];
 
 export const SLUG_TO_PAGE: Record<string, string> = {
@@ -122,7 +121,6 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-supheliler": "suspicious",
   "adm-giris": "login-logs",
   "adm-demo": "demo",
-  "adm-test": "test",
 };
 
 export const LS_KEYS = {
@@ -137,4 +135,4 @@ export const LS_KEYS = {
   sound: "rf_sound",
 } as const;
 
-export type PspProviderName = "mock" | "paytr" | "stripe" | "sumup";
+export type PspProviderName = "paytr" | "stripe" | "sumup";

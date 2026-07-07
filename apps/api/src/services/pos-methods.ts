@@ -5,7 +5,7 @@ import { getProvider } from "./psp/index.js";
 import type { PspProvider } from "./psp/types.js";
 import { getOrSet, invalidatePrefix } from "./cache.js";
 
-const PROVIDERS: PspProviderName[] = ["mock", "paytr", "stripe", "sumup"];
+const PROVIDERS: PspProviderName[] = ["paytr", "stripe", "sumup"];
 const POS_CACHE_TTL_SEC = 30;
 
 async function fetchEnabledPosMethods() {
@@ -21,8 +21,6 @@ export async function invalidatePosMethodsCache(): Promise<void> {
 
 export function isProviderConfigured(provider: string): boolean {
   switch (provider) {
-    case "mock":
-      return true;
     case "paytr":
       return !!(config.psp.paytr.merchantId && config.psp.paytr.merchantKey);
     case "stripe":
@@ -56,6 +54,28 @@ export async function getEnabledPosMethodsForSite(siteMinDeposit: number) {
     }));
 }
 
+export async function activateSinglePosMethod(provider: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.posMethod.updateMany({ data: { enabled: false, isDefault: false } }),
+    prisma.posMethod.update({ where: { provider }, data: { enabled: true, isDefault: true } }),
+  ]);
+  await invalidatePosMethodsCache();
+}
+
+export async function deactivatePosMethod(provider: string): Promise<void> {
+  await prisma.posMethod.update({
+    where: { provider },
+    data: { enabled: false, isDefault: false },
+  });
+  await invalidatePosMethodsCache();
+}
+
+export async function getActivePosMethodForSite(siteMinDeposit: number) {
+  const methods = await getEnabledPosMethodsForSite(siteMinDeposit);
+  if (methods.length === 0) return null;
+  return methods.find((m) => m.isDefault) ?? methods[0];
+}
+
 export async function resolvePosProvider(
   requestedProvider: string | null | undefined,
   siteMinDeposit: number,
@@ -64,24 +84,30 @@ export async function resolvePosProvider(
 
   const configured = enabled.filter((m) => isProviderConfigured(m.provider));
 
-  let method = requestedProvider
-    ? configured.find((m) => m.provider === requestedProvider)
-    : configured.find((m) => m.isDefault) ?? configured[0];
-
-  if (!method && configured.length === 0) {
+  if (configured.length === 0) {
     const fallback = config.psp.defaultProvider;
     if (!isProviderConfigured(fallback)) return null;
+    const provider = getProvider(fallback);
+    if (!provider) return null;
     return {
       method: null,
-      provider: getProvider(fallback),
+      provider,
     };
   }
 
-  if (!method) return null;
+  const active = configured.find((m) => m.isDefault) ?? configured[0];
+  if (!active) return null;
+
+  if (requestedProvider && requestedProvider !== active.provider) {
+    return null;
+  }
+
+  const provider = getProvider(active.provider as PspProviderName);
+  if (!provider) return null;
 
   return {
-    method,
-    provider: getProvider(method.provider as PspProviderName),
+    method: active,
+    provider,
   };
 }
 

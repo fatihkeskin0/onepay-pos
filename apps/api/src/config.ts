@@ -8,6 +8,51 @@ loadEnv({ path: resolve(__dirname, "../../../.env") });
 const apiPort = Number(process.env.API_PORT ?? 4105);
 const webPort = Number(process.env.WEB_PORT ?? 3105);
 
+function envFirst(...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function coolifyServiceUrl(urlKey: string, fqdnKey: string): string | undefined {
+  const url = envFirst(urlKey);
+  if (url) return url;
+  const fqdn = envFirst(fqdnKey);
+  if (!fqdn) return undefined;
+  return fqdn.startsWith("http://") || fqdn.startsWith("https://") ? fqdn : `https://${fqdn}`;
+}
+
+const panelUrl =
+  envFirst("APP_BASE_URL") ??
+  coolifyServiceUrl("SERVICE_URL_WEB", "SERVICE_FQDN_WEB") ??
+  `http://localhost:${webPort}`;
+
+const paymentUrl =
+  envFirst("APP_PAYMENT_URL") ??
+  coolifyServiceUrl("SERVICE_URL_PAYMENT", "SERVICE_FQDN_PAYMENT") ??
+  panelUrl;
+
+const apiPublicUrl =
+  envFirst("API_PUBLIC_URL") ??
+  coolifyServiceUrl("SERVICE_URL_API", "SERVICE_FQDN_API") ??
+  `http://localhost:${apiPort}`;
+
+function resolveCorsOrigins(): string | string[] {
+  const explicit = envFirst("CORS_ORIGIN");
+  if (explicit) {
+    const parts = explicit.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return panelUrl;
+    if (parts.length === 1) return parts[0] ?? panelUrl;
+    return parts;
+  }
+
+  const origins = [...new Set([panelUrl, paymentUrl].filter(Boolean))];
+  if (origins.length <= 1) return origins[0] ?? panelUrl;
+  return origins;
+}
+
 export const config = {
   db: {
     url: process.env.DATABASE_URL ?? "postgresql://onepara:onepara@localhost:5432/onepara_card",
@@ -19,14 +64,14 @@ export const config = {
     secret: process.env.APP_SECRET ?? "dev-secret-change-in-production",
     env: process.env.APP_ENV ?? "development",
     webPort,
-    baseUrl: process.env.APP_BASE_URL ?? `http://localhost:${webPort}`,
-    paymentUrl: process.env.APP_PAYMENT_URL ?? `http://localhost:${webPort}`,
+    baseUrl: panelUrl,
+    paymentUrl,
   },
   api: {
     port: apiPort,
-    publicUrl: process.env.API_PUBLIC_URL ?? `http://localhost:${apiPort}`,
+    publicUrl: apiPublicUrl,
     host: process.env.API_HOST ?? "0.0.0.0",
-    corsOrigin: process.env.CORS_ORIGIN ?? `http://localhost:${webPort}`,
+    corsOrigin: resolveCorsOrigins(),
   },
   bc: {
     secret: process.env.BC_SECRET ?? "dev-bc-secret",
@@ -37,7 +82,7 @@ export const config = {
     botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   },
   psp: {
-    defaultProvider: (process.env.PSP_DEFAULT_PROVIDER ?? "mock") as "mock" | "paytr" | "stripe" | "sumup",
+    defaultProvider: (process.env.PSP_DEFAULT_PROVIDER ?? "stripe") as "paytr" | "stripe" | "sumup",
     paytr: {
       merchantId: process.env.PAYTR_MERCHANT_ID ?? "",
       merchantKey: process.env.PAYTR_MERCHANT_KEY ?? "",
@@ -46,6 +91,7 @@ export const config = {
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
     },
     sumup: {
@@ -54,3 +100,22 @@ export const config = {
     },
   },
 } as const;
+
+const DEV_APP_SECRET = "dev-secret-change-in-production";
+const DEV_BC_SECRET = "dev-bc-secret";
+
+export function validateProductionSecrets(): void {
+  if (config.app.env !== "production") return;
+
+  if (!process.env.APP_SECRET?.trim() || config.app.secret === DEV_APP_SECRET) {
+    console.error("[config] APP_SECRET must be set to a strong value in production");
+    process.exit(1);
+  }
+
+  if (!process.env.BC_SECRET?.trim() || config.bc.secret === DEV_BC_SECRET) {
+    console.error("[config] BC_SECRET must be set to a strong value in production");
+    process.exit(1);
+  }
+}
+
+validateProductionSecrets();

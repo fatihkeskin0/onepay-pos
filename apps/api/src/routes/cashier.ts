@@ -14,6 +14,7 @@ import { byIp } from "../services/rate-limit.js";
 import { makePartialToken, verifyPartialToken, verifyTotp, generateSecret, getQrDataUrl } from "../services/totp.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback, getSetting } from "../services/callback.js";
+import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
 
 export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   app.post("/login", async (request, reply) => {
@@ -135,6 +136,15 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     if (q.to) where.createdAt = { ...(where.createdAt as object), lte: new Date(q.to) };
     if (q.q) where.OR = [{ reference: { contains: q.q } }, { userId: { contains: q.q } }];
 
+    const siteIds = await getCashierSiteIds(user);
+    if (siteIds !== "all") {
+      if (siteIds.length === 0) {
+        ok(reply, { items: [], total: 0, page, pages: 0 });
+        return;
+      }
+      where.siteId = { in: siteIds };
+    }
+
     const [items, total] = await Promise.all([
       prisma.deposit.findMany({
         where,
@@ -155,6 +165,13 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
     const body = request.body as { id?: number };
     const depositId = Number(body.id);
+
+    const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit || !(await cashierCanAccessSite(user, deposit.siteId))) {
+      error(reply, "Yetkisiz", 403);
+      return;
+    }
+
     const approved = await approveDeposit(depositId, user.id);
     if (!approved) {
       error(reply, "Onaylanamadı", 409);
@@ -177,7 +194,15 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     if (!user || !(await checkSubPerm(user, "deps_action", reply))) return;
 
     const body = request.body as { id?: number; reason?: string };
-    const rejected = await rejectDeposit(Number(body.id), user.id, String(body.reason ?? ""));
+    const depositId = Number(body.id);
+
+    const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit || !(await cashierCanAccessSite(user, deposit.siteId))) {
+      error(reply, "Yetkisiz", 403);
+      return;
+    }
+
+    const rejected = await rejectDeposit(depositId, user.id, String(body.reason ?? ""));
     if (!rejected) {
       error(reply, "Reddedilemedi", 409);
       return;

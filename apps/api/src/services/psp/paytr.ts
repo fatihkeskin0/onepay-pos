@@ -11,6 +11,7 @@ interface PayTrTokenResponse {
 /** PayTR iFrame API adapter */
 export class PayTrProvider implements PspProvider {
   name = "paytr" as const;
+  readonly renderMode = "iframe" as const;
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
     const { paytr } = config.psp;
@@ -88,7 +89,8 @@ export class PayTrProvider implements PspProvider {
 
       return {
         providerRef: merchantOid,
-        redirectUrl: `https://www.paytr.com/odeme/guvenli/${data.token}`,
+        renderMode: this.renderMode,
+        iframeUrl: `https://www.paytr.com/odeme/guvenli/${data.token}`,
         status: "initiated",
         rawResponse: { merchantOid, token: data.token, total_amount: amountKurus },
       };

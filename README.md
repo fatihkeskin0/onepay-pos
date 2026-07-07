@@ -45,8 +45,8 @@ Use `pnpm dev:clean` if the web app shows stale chunk / Internal Server Error (c
 1. Site calls `POST /user/create_payment_link` with `X-API-Key`
 2. User opens `/pay/{token}`
 3. Pay page loads `GET /user/pos_methods?token=...`
-4. User selects amount + provider → `POST /user/create_deposit`
-5. PSP redirect → webhook callback → auto approve + commission snapshot
+4. User confirms amount → `POST /user/create_deposit`
+5. Embedded checkout (PayTR iframe / Stripe Payment Element) or redirect (SumUp) → PSP webhook → auto approve + commission snapshot
 6. Site receives outbound callback (CheckSum signed)
 7. Pay page polls `GET /user/deposit_status`
 
@@ -69,9 +69,8 @@ BC Wallet API (`/bc/balance`, `/bc/credit`, `/bc/debit`) uses `X-Signature` HMAC
 
 | Provider | Role | Env vars |
 |----------|------|----------|
-| mock | Dev default | none |
 | paytr | Production | `PAYTR_MERCHANT_*` |
-| stripe | Production | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
+| stripe | Production (Payment Element) | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | sumup | Production | `SUMUP_API_KEY`, `SUMUP_MERCHANT_CODE` |
 
 Configure active providers, min/max amounts, and default method in **Admin → POS Ayarları** (`/panel/pos`). Credentials live in `.env`.
@@ -90,6 +89,14 @@ docker compose -f compose.dev.yaml up --build
 ```
 
 Then run migrations/seed inside api container or locally against `postgresql://onepara:onepara@localhost:5432/onepara_card`.
+
+Production first-time seed (inside api container or with prod `DATABASE_URL`):
+
+```powershell
+SEED_ALLOW=1 SEED_ADMIN_PASSWORD="your-strong-password" pnpm db:seed:prod
+```
+
+Local dev seed: `pnpm db:seed` (uses `.env` via dotenv).
 
 ## Production (Coolify)
 

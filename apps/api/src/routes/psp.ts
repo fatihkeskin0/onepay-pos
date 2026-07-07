@@ -1,8 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma, type Prisma } from "@onepara/db";
-import { getProvider, handlePspPaid } from "../services/psp/index.js";
+import {
+  getProvider,
+  handlePspFailed,
+  handlePspPaid,
+  isKnownProvider,
+} from "../services/psp/index.js";
+import { validatePspPaymentAmount } from "../services/psp/validate-amount.js";
 import type { PspProviderName } from "@onepara/shared";
 import { ok, error } from "../services/response.js";
+import { byIp } from "../services/rate-limit.js";
 
 function getRawBody(request: FastifyRequest): string | undefined {
   const raw = (request as FastifyRequest & { rawBody?: string | Buffer }).rawBody;
@@ -32,10 +39,22 @@ async function resolveDepositId(
 
 export async function pspRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { provider: string } }>("/:provider/callback", async (request, reply) => {
-    const providerName = request.params.provider as PspProviderName;
-    const provider = getProvider(providerName);
-    const rawBody = getRawBody(request);
+    if (!(await byIp(request, "psp-callback", 120, 60, reply))) return;
 
+    const providerName = request.params.provider;
+
+    if (!isKnownProvider(providerName)) {
+      error(reply, "Unknown provider", 404);
+      return;
+    }
+
+    const provider = getProvider(providerName);
+    if (!provider) {
+      error(reply, "Unknown provider", 404);
+      return;
+    }
+
+    const rawBody = getRawBody(request);
     const result = await provider.verifyCallback(request.body, request.headers, rawBody);
 
     if (!result.valid) {
@@ -58,6 +77,33 @@ export async function pspRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
+    const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) {
+      error(reply, "Deposit not found", 404);
+      return;
+    }
+
+    if (deposit.status !== "pending" && result.status === "paid") {
+      if (providerName === "paytr") {
+        reply.type("text/plain").send("OK");
+        return;
+      }
+      ok(reply, { received: true, skipped: true });
+      return;
+    }
+
+    if (
+      (result.status === "paid" || result.status === "failed") &&
+      !validatePspPaymentAmount(Number(deposit.amount), providerName, result)
+    ) {
+      if (providerName === "paytr") {
+        reply.status(400).type("text/plain").send("Amount mismatch");
+        return;
+      }
+      error(reply, "Amount mismatch", 400);
+      return;
+    }
+
     const pspTx = await prisma.pspTransaction.findFirst({
       where: { depositId, provider: providerName },
       orderBy: { createdAt: "desc" },
@@ -77,10 +123,7 @@ export async function pspRoutes(app: FastifyInstance): Promise<void> {
     if (result.status === "paid") {
       await handlePspPaid(depositId);
     } else if (result.status === "failed") {
-      await prisma.deposit.updateMany({
-        where: { id: depositId, status: "pending" },
-        data: { status: "rejected", rejectReason: "PSP ödeme başarısız" },
-      });
+      await handlePspFailed(depositId);
     }
 
     if (providerName === "paytr") {
@@ -89,24 +132,5 @@ export async function pspRoutes(app: FastifyInstance): Promise<void> {
     }
 
     ok(reply, { received: true });
-  });
-
-  app.post("/mock/complete", async (request, reply) => {
-    const body = request.body as Record<string, string>;
-    const depositId = Number(body.deposit_id);
-    const providerRef = body.provider_ref ?? "";
-
-    if (!depositId) {
-      error(reply, "deposit_id gerekli", 422);
-      return;
-    }
-
-    await prisma.pspTransaction.updateMany({
-      where: { depositId },
-      data: { status: "paid", providerRef },
-    });
-
-    await handlePspPaid(depositId);
-    ok(reply, { completed: true });
   });
 }
