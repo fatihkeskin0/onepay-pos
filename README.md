@@ -108,7 +108,7 @@ See [ops/coolify/README.md](ops/coolify/README.md).
 
 - Compose file: `docker-compose.yaml` (Coolify); bundled local: `ops/docker/compose.bundled.yaml`
 - Env template: `.env.production.example`
-- Deploy: Coolify → Docker Compose → map web (3105) + api (4105) domains
+- Deploy: Coolify → Docker Compose → map web + api domains (containers listen on port **80**; no port suffix in Domains field)
 
 ## Scope Notes
 

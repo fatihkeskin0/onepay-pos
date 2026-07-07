@@ -4,10 +4,10 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 
 ## Stack
 
-| Service | Image / Dockerfile | Port | Public domain |
-|---------|-------------------|------|---------------|
-| `web` | `ops/docker/Dockerfile.web` | 3105 | Yes — panel + `/pay/*` + `/docs` |
-| `api` | `ops/docker/Dockerfile.api` | 4105 | Yes — PSP webhooks (`/psp/*`) |
+| Service | Image / Dockerfile | Container port | Public domain |
+|---------|-------------------|----------------|---------------|
+| `web` | `ops/docker/Dockerfile.web` | 80 | Yes — panel + `/pay/*` + `/docs` |
+| `api` | `ops/docker/Dockerfile.api` | 80 | Yes — PSP webhooks (`/psp/*`) |
 
 **Required backing services:** PostgreSQL and Redis — use **Coolify managed resources** (e.g. `postgres:18-alpine`). Bundled stack for local only: `ops/docker/compose.bundled.yaml`.
 
@@ -18,18 +18,64 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 3. Create **PostgreSQL** and **Redis** as separate Coolify resources; copy their internal URLs into `DATABASE_URL` and `REDIS_URL`.
 4. `DATABASE_URL` / `REDIS_URL` must use **Coolify internal hostnames** (from each resource’s connection string — not `@postgres:5432`).
 5. The compose file attaches `api` to the external `coolify` Docker network so it can reach managed Postgres/Redis.
-6. Map domains in Coolify **Domains** tab — **each hostname must be listed separately** on the **web** service (port **3105**):
-   - `https://onekart.info` — marketing landing + `/docs`
-   - `https://app.onekart.info` — panel (`/login`, `/dashboard`, …)
-   - `https://odeme.click` — customer `/pay/*` only
-   - **api** service (port **4105**): `https://api.onekart.info`
-   - Missing `app.*` in Domains → Traefik shows **“no available server”** even when `onekart.info` works.
+6. Map domains in Coolify **Domains** tab — **comma-separated, one field** per service. Containers listen on **port 80** (Coolify/Traefik default — do **not** append `:3105` or `:4105` to domains):
+   - **web:** `https://onekart.info,https://app.onekart.info,https://odeme.click`
+   - Marketing: `onekart.info` · Panel: `app.onekart.info` · Payment: `odeme.click`
+   - **api:** `https://api.onekart.info`
+   - All three web hostnames must be present; missing `app.*` → **“no available server”** or 504 on that host.
 7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
    - Web build uses `API_PUBLIC_URL` as `NEXT_PUBLIC_API_URL` (browser calls `https://api.onekart.info` directly)
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
 8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
 9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
+
+## Cloudflare (manual — until API integration)
+
+Production traffic stays **behind Cloudflare proxy** (orange cloud). Do not disable proxy or switch to DNS-only for normal operation.
+
+Apply the same settings on **each zone** (`onekart.info`, `odeme.click` if separate):
+
+| Setting | Value | Notes |
+|---------|--------|--------|
+| **DNS proxy** | **Proxied** (orange cloud) | All public records: `@`, `app`, `api`, and payment host |
+| **SSL/TLS mode** | **Full (strict)** | Origin (Coolify/Let's Encrypt) must have a valid cert |
+| **Always Use HTTPS** | **On** | Edge redirects HTTP → HTTPS |
+| **Automatic HTTPS Rewrites** | **On** | Optional but recommended |
+| **Minimum TLS Version** | **TLS 1.2** | Default is fine |
+| **SSL/TLS mode: Flexible** | **Off** | Flexible breaks origin HTTPS and causes 525/504 loops |
+
+DNS records (all **Proxied** → same Coolify server IP):
+
+| Type | Name | Target |
+|------|------|--------|
+| A or CNAME | `@` | Coolify server |
+| A or CNAME | `app` | Same server |
+| A or CNAME | `api` | Same server |
+
+If `odeme.click` is a separate zone, its A/CNAME must point to the **same origin IP** as `onekart.info`.
+
+**Do not use for production:** grey cloud (DNS only), Flexible SSL, or pausing Cloudflare orange proxy — use only for short-lived debugging.
+
+**Planned:** Cloudflare Account API integration (API token) for automated DNS/SSL management — not wired yet; configure manually in the dashboard until then.
+
+## Post-deploy verification
+
+Test public URLs in the browser (through Cloudflare):
+
+- `https://onekart.info`
+- `https://app.onekart.info/login`
+- `https://api.onekart.info/health`
+
+Optional **server-side** check (Traefik only, not a substitute for Cloudflare testing):
+
+```sh
+curl -I --max-time 15 -k -H "Host: onekart.info" https://127.0.0.1/
+```
+
+Expected: **200** or **30x** — not timeout. If public URLs fail but this works, review Cloudflare SSL/proxy settings above.
+
+If domains still include `:3105` or `:4105`, remove those suffixes and redeploy.
 
 ## Environment variables
 
@@ -83,7 +129,7 @@ docker compose -f ops/docker/compose.bundled.yaml up --build
 
 ## Architecture notes
 
-- Web proxies `/backend/*` → internal `http://api:4105/*` (fallback when build lacks public API URL).
+- Web proxies `/backend/*` → internal `http://api:80/*` (fallback when build lacks public API URL).
 - Panel/pay browser requests use `NEXT_PUBLIC_API_URL` (`API_PUBLIC_URL` at build), e.g. `https://api.onekart.info`.
 - Merchants integrate via `/backend/user/*` on the **web** domain.
 - PSP callbacks hit **api** domain: `POST /psp/{provider}/callback`.

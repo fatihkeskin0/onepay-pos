@@ -16,7 +16,7 @@ services:
       APP_ENV: production
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       APP_PAYMENT_URL: ${APP_PAYMENT_URL:?set APP_PAYMENT_URL}
-      API_PORT: 4105
+      API_PORT: 80
       API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
       API_HOST: 0.0.0.0
       CORS_ORIGIN: ${CORS_ORIGIN:-}
@@ -36,7 +36,7 @@ services:
     volumes:
       - uploads_data:/app/data/uploads
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4105/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/health"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -48,13 +48,13 @@ services:
       dockerfile: ops/docker/Dockerfile.web
       args:
         NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
-        INTERNAL_API_URL: http://api:4105
+        INTERNAL_API_URL: http://api:80
     restart: unless-stopped
     networks:
       - default
       - coolify
     environment:
-      PORT: 3105
+      PORT: 80
       HOSTNAME: 0.0.0.0
       APP_MARKETING_URL: ${APP_MARKETING_URL:?set APP_MARKETING_URL}
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
@@ -63,7 +63,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3105/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/api/health"]
       interval: 15s
       timeout: 5s
       retries: 5
