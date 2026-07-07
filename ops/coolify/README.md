@@ -55,7 +55,7 @@ Set `PSP_DEFAULT_PROVIDER` to `paytr`, `stripe`, or `sumup`. Only that provider'
 
 | Variable | Description |
 |----------|-------------|
-| `BC_SECRET`, `BC_API_URL`, `BC_PARTNER_ID` | BetConstruct integration |
+| `BC_SECRET` | HMAC secret for BetConstruct seamless wallet callbacks (`/api/*`) — set only if used |
 | `TELEGRAM_BOT_TOKEN` | Telegram notifications |
 
 ## First admin user
