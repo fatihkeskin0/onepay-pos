@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: ops/docker/Dockerfile.api
     restart: unless-stopped
+    networks:
+      - default
+      - coolify
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
       REDIS_URL: ${REDIS_URL:?set REDIS_URL}
@@ -59,3 +62,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+networks:
+  coolify:
+    external: true
+    name: ${COOLIFY_NETWORK:-coolify}

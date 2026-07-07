@@ -16,15 +16,16 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 1. Create a **Docker Compose** project pointing to this repo.
 2. **Docker Compose Location:** `/docker-compose.yaml` (api + web only — not `/ops/docker/compose.prod.yaml`).
 3. Create **PostgreSQL** and **Redis** as separate Coolify resources; copy their internal URLs into `DATABASE_URL` and `REDIS_URL`.
-4. Link the compose stack to the same Coolify network as DB/Redis (or use the connection strings Coolify provides).
-5. Map domains in Coolify **Domains** tab:
+4. `DATABASE_URL` / `REDIS_URL` must use **Coolify internal hostnames** (from each resource’s connection string — not `@postgres:5432`).
+5. The compose file attaches `api` to the external `coolify` Docker network so it can reach managed Postgres/Redis.
+6. Map domains in Coolify **Domains** tab:
    - **web** → panel domain (e.g. `https://onekart.info`)
    - **api** → webhook domain (e.g. `https://api.onekart.info`)
-6. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
+7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
-7. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, PSP creds
-8. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
+8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
+9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
 
 ## Environment variables
 

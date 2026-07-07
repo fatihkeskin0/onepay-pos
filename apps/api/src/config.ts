@@ -75,7 +75,7 @@ export const config = {
   },
   bc: {
     secret: process.env.BC_SECRET ?? "dev-bc-secret",
-    apiUrl: process.env.BC_API_URL ?? "https://api.betconstruct.com",
+    apiUrl: process.env.BC_API_URL ?? "",
     partnerId: process.env.BC_PARTNER_ID ?? "",
   },
   telegram: {
@@ -112,12 +112,13 @@ export function validateProductionSecrets(): void {
     process.exit(1);
   }
 
-  if (!process.env.BC_SECRET?.trim() || config.bc.secret === DEV_BC_SECRET) {
-    const bcConfigured = !!(config.bc.apiUrl?.trim() || config.bc.partnerId?.trim());
-    if (bcConfigured) {
-      console.error("[config] BC_SECRET must be set when BC_API_URL or BC_PARTNER_ID is configured");
-      process.exit(1);
-    }
+  const bcConfigured = !!(process.env.BC_API_URL?.trim() || process.env.BC_PARTNER_ID?.trim());
+  if (
+    bcConfigured &&
+    (!process.env.BC_SECRET?.trim() || config.bc.secret === DEV_BC_SECRET)
+  ) {
+    console.error("[config] BC_SECRET must be set when BC_API_URL or BC_PARTNER_ID is configured");
+    process.exit(1);
   }
 }
 

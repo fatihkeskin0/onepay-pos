@@ -10,7 +10,7 @@ import { adminRoutes } from "./routes/admin.js";
 import { pspRoutes } from "./routes/psp.js";
 import { bcRoutes } from "./routes/bc.js";
 import { prisma } from "@onepara/db";
-import { connectRedis, pingRedis } from "./services/redis.js";
+import { pingRedis, waitForRedis } from "./services/redis.js";
 import { depositCancelled, depositUrl, getSiteCallback } from "./services/callback.js";
 
 async function notifyDepositCancelled(depositId: number): Promise<void> {
@@ -129,7 +129,7 @@ setInterval(() => {
 }, 60_000);
 
 try {
-  await connectRedis();
+  await waitForRedis();
   await app.listen({ port: config.api.port, host: config.api.host });
   console.log(`API listening on http://${config.api.host}:${config.api.port}`);
 } catch (err) {
