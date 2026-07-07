@@ -8,6 +8,9 @@ import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback, invalidateSettingCache } from "../services/callback.js";
 import { invalidatePosMethodsCache, listPosMethodsWithMeta, activateSinglePosMethod, deactivatePosMethod } from "../services/pos-methods.js";
 import { isKnownProvider } from "../services/psp/index.js";
+import { formatBcExpiry } from "../services/format.js";
+
+const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/dashboard", async (request, reply) => {
@@ -704,7 +707,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const siteId = Number(body.site_id);
     const userId = String(body.user_id ?? "demo_user");
     const userName = String(body.name ?? "Demo Müşteri");
-    const amount = body.amount != null ? Number(body.amount) : 0;
+    let amount = body.amount != null ? Number(body.amount) : 0;
     const returnUrl = body.return_url ? String(body.return_url) : `${config.app.baseUrl}/panel/demo`;
 
     if (!siteId) {
@@ -718,13 +721,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (amount > 0 && amount < Number(site.minDeposit)) {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      amount = Number(site.minDeposit);
+    }
+
+    if (amount < Number(site.minDeposit)) {
       error(reply, `Minimum yatırım tutarı ${site.minDeposit} TL`, 422);
       return;
     }
 
     const token = randomBytes(16).toString("hex");
-    const expiresAt = new Date(Date.now() + 45 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + PAYMENT_LINK_TTL_MS);
 
     await prisma.paymentSession.create({
       data: {
@@ -744,8 +751,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       token,
       url: `${config.app.paymentUrl}${payPath}`,
       pay_path: payPath,
-      expires_at: expiresAt.toISOString(),
-      amount_editable: amount === 0,
+      expires_at: formatBcExpiry(expiresAt),
+      amount,
       site_name: site.name,
     });
   });

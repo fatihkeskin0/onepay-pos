@@ -23,7 +23,7 @@ interface DemoResult {
   url: string;
   pay_path: string;
   expires_at: string;
-  amount_editable: boolean;
+  amount: number;
   site_name: string;
 }
 
@@ -34,7 +34,6 @@ export default function DemoPage() {
   const [userId, setUserId] = useState("demo_user_001");
   const [userName, setUserName] = useState("Demo Müşteri");
   const [amount, setAmount] = useState("500");
-  const [freeAmount, setFreeAmount] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DemoResult | null>(null);
 
@@ -66,7 +65,7 @@ export default function DemoPage() {
         site_id: Number(siteId),
         user_id: userId,
         name: userName,
-        amount: freeAmount ? 0 : Number(amount) || 0,
+        amount: Number(amount) || 0,
       };
       const data = await API.post<DemoResult>("/admin/demo_payment_link", payload);
       setResult(data);
@@ -127,28 +126,15 @@ export default function DemoPage() {
             </FormField>
           </div>
 
-          <div className="form-group">
-            <label className="form-check demo-check">
-              <input
-                type="checkbox"
-                checked={freeAmount}
-                onChange={(e) => setFreeAmount(e.target.checked)}
-              />
-              Serbest tutar (müşteri ödeme sayfasında girer)
-            </label>
-          </div>
-
-          {!freeAmount ? (
-            <FormField label="Sabit tutar (₺)" hint={selectedSite ? `Min: ${selectedSite.minDeposit} ₺` : undefined}>
-              <Input
-                type="number"
-                min={0}
-                step={1}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </FormField>
-          ) : null}
+          <FormField label="Sabit tutar (₺)" hint={selectedSite ? `Min: ${selectedSite.minDeposit} ₺` : undefined}>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </FormField>
 
           <div className="demo-actions">
             <Button variant="primary" loading={loading} onClick={() => startDemo(true)}>
@@ -173,11 +159,11 @@ export default function DemoPage() {
               </div>
               <div className="demo-result-row">
                 <span className="text-muted">Tutar</span>
-                <strong>{result.amount_editable ? "Serbest" : `${amount} ₺`}</strong>
+                <strong>{result.amount.toLocaleString("tr-TR")} ₺</strong>
               </div>
               <div className="demo-result-row">
                 <span className="text-muted">Geçerlilik</span>
-                <span>{new Date(result.expires_at).toLocaleString("tr-TR")}</span>
+                <span>{result.expires_at}</span>
               </div>
               <div className="demo-link-box">
                 <code>{result.url}</code>

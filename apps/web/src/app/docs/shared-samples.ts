@@ -16,17 +16,8 @@ export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
   "data": {
     "token": "a1b2c3d4e5f6789012345678abcdef01",
     "url": "https://pay.example.com/pay/a1b2c3d4e5f6789012345678abcdef01",
-    "expires_at": "2026-07-05T15:45:00.000Z",
-    "amount_editable": false
+    "expires_at": "2026-07-05 18:45:00"
   }
-}`;
-
-export const SAMPLE_CREATE_PAYMENT_LINK_FREE_REQ = `{
-  "user_id": "customer_12345",
-  "name": "Ahmet Yılmaz",
-  "amount": 0,
-  "return_url": "https://merchant.example.com/deposit/return",
-  "transaction_id": "ext-ref-002"
 }`;
 
 export const SAMPLE_DEPOSIT_STATUS_REQ = `GET /backend/user/deposit_status?ref={reference}&token={deposit_token}`;

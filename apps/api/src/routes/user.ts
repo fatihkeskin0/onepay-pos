@@ -13,6 +13,9 @@ import {
   validateAmountForMethod,
 } from "../services/pos-methods.js";
 import { buildPspEmbedPayload, extractPspEmbedFields } from "../services/psp/embed-response.js";
+import { formatBcExpiry } from "../services/format.js";
+
+const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
 async function loadSessionByToken(token: string) {
   return prisma.paymentSession.findFirst({
@@ -42,24 +45,39 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (!site) return;
 
     const body = request.body as Record<string, unknown>;
-    const userId = String(body.user_id ?? "");
+    const userId = String(body.user_id ?? "").trim();
     const amount = Number(body.amount ?? 0);
     const userName = String(body.name ?? body.user_name ?? "");
-    const returnUrl = String(body.return_url ?? "");
-    const externalId = body.transaction_id ? String(body.transaction_id) : null;
+    const returnUrl = String(body.return_url ?? "").trim();
+    const externalId = body.transaction_id != null ? String(body.transaction_id).trim() : "";
 
     if (!userId) {
-      error(reply, "user_id gerekli", 422);
+      error(reply, "user_id gerekli", 400);
       return;
     }
 
-    if (amount > 0 && amount < Number(site.minDeposit)) {
-      error(reply, `Minimum yatırım tutarı ${site.minDeposit} TL`, 422);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      error(reply, "Geçerli amount gerekli", 400);
+      return;
+    }
+
+    if (amount < Number(site.minDeposit)) {
+      error(reply, `Minimum yatırım tutarı ${site.minDeposit} TL`, 400);
+      return;
+    }
+
+    if (!returnUrl) {
+      error(reply, "return_url gerekli", 400);
+      return;
+    }
+
+    if (!externalId) {
+      error(reply, "transaction_id gerekli", 400);
       return;
     }
 
     const token = randomBytes(16).toString("hex");
-    const expiresAt = new Date(Date.now() + 45 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + PAYMENT_LINK_TTL_MS);
 
     await prisma.paymentSession.create({
       data: {
@@ -77,8 +95,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     ok(reply, {
       url: `${config.app.paymentUrl}/pay/${token}`,
       token,
-      expires_at: expiresAt.toISOString(),
-      amount_editable: amount === 0,
+      expires_at: formatBcExpiry(expiresAt),
     });
   });
 
@@ -109,7 +126,6 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       session: {
         token: session.token,
         amount: fixedAmount,
-        amount_editable: fixedAmount <= 0,
         user_name: session.userName,
         site_name: session.site.name,
         brand: {
@@ -203,11 +219,8 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = session.userId;
-    let amount = Number(body.amount ?? 0);
-    const sessionAmount = Number(session.amount);
-    if (sessionAmount > 0) {
-      amount = sessionAmount;
-    } else if (amount <= 0) {
+    const amount = Number(session.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
       error(reply, "Geçerli tutar girin", 422);
       return;
     }

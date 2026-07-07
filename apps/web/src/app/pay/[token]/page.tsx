@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
-import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { StripePaymentPanel } from "@/components/pay/StripePaymentPanel";
 
@@ -18,7 +17,6 @@ interface PayLimits {
 interface SessionInfo {
   token: string;
   amount: number;
-  amount_editable: boolean;
   user_name: string;
   site_name: string;
   brand: { color: string; bg: string; logo: string | null; name: string };
@@ -69,7 +67,6 @@ export default function PayPage() {
   const [paymentReady, setPaymentReady] = useState(false);
   const [limits, setLimits] = useState<PayLimits | null>(null);
   const [amount, setAmount] = useState(0);
-  const [amountInput, setAmountInput] = useState("");
   const [depositRef, setDepositRef] = useState("");
   const [depositToken, setDepositToken] = useState("");
   const [renderMode, setRenderMode] = useState<PspRenderMode | null>(null);
@@ -128,11 +125,7 @@ export default function PayPage() {
         setSession(json.data.session);
         setPaymentReady(json.data.payment_ready);
         setLimits(json.data.limits);
-        const fixed = json.data.session.amount;
-        if (fixed > 0) {
-          setAmount(fixed);
-          setAmountInput(String(fixed));
-        }
+        setAmount(json.data.session.amount);
       } catch {
         setPayError("Sunucuya ulaşılamıyor");
         setState("expired");
@@ -142,8 +135,6 @@ export default function PayPage() {
     };
     load();
   }, [token]);
-
-  const effectiveAmount = session?.amount_editable ? Number(amountInput) || 0 : amount;
 
   const pollStatus = useCallback(async (ref: string, tok: string) => {
     try {
@@ -193,18 +184,17 @@ export default function PayPage() {
   }, [state, renderMode, provider, iframeUrl]);
 
   const isAmountValid = useMemo(() => {
-    if (effectiveAmount <= 0) return false;
+    if (amount <= 0) return false;
     if (!limits) return paymentReady;
-    return effectiveAmount >= limits.min && effectiveAmount <= limits.max;
-  }, [effectiveAmount, limits, paymentReady]);
+    return amount >= limits.min && amount <= limits.max;
+  }, [amount, limits, paymentReady]);
 
   const startPayment = async () => {
     if (!paymentReady) {
       setPayError("Ödeme altyapısı şu an kullanılamıyor");
       return;
     }
-    const payAmount = session?.amount_editable ? Number(amountInput) : amount;
-    if (!payAmount || payAmount <= 0) {
+    if (!amount || amount <= 0) {
       setPayError("Geçerli tutar girin");
       return;
     }
@@ -212,7 +202,6 @@ export default function PayPage() {
     setState("ready");
     setProgress(55);
     setPayError("");
-    setAmount(payAmount);
 
     try {
       const res = await fetch("/backend/user/create_deposit", {
@@ -220,7 +209,7 @@ export default function PayPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_token: token,
-          amount: payAmount,
+          amount,
         }),
       });
       const json = (await res.json()) as {
@@ -271,7 +260,7 @@ export default function PayPage() {
       ? `${window.location.origin}/pay/${token}?dref=${encodeURIComponent(depositRef)}&dtoken=${encodeURIComponent(depositToken)}`
       : "";
 
-  const displayAmount = useMemo(() => formatAmount(effectiveAmount || 0), [effectiveAmount]);
+  const displayAmount = useMemo(() => formatAmount(amount || 0), [amount]);
 
   return (
     <div className="pay-page">
@@ -330,31 +319,6 @@ export default function PayPage() {
                 <p className="pay-intro">
                   Tutarınızı onaylayın ve güvenli ödeme adımına geçin.
                 </p>
-
-                {session?.amount_editable ? (
-                  <div className="pay-amount-field">
-                    <div className="pay-section-title">Yatırım tutarı</div>
-                    <Input
-                      type="number"
-                      min={limits?.min ?? 0}
-                      max={limits?.max}
-                      step={1}
-                      value={amountInput}
-                      onChange={(e) => {
-                        setAmountInput(e.target.value);
-                        setPayError("");
-                      }}
-                      placeholder="0"
-                      aria-label="Yatırım tutarı"
-                    />
-                    <span className="pay-amount-suffix">₺</span>
-                    {limits ? (
-                      <p className="text-xs text-muted" style={{ marginTop: 8 }}>
-                        Limit: {limits.min.toLocaleString("tr-TR")} – {limits.max.toLocaleString("tr-TR")} ₺
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 {!paymentReady ? (
                   <div className="pay-alert pay-alert-error">
