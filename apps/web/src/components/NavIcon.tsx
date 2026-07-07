@@ -28,6 +28,13 @@ export function NavIcon({ id, active, size = 18 }: NavIconProps) {
           <rect x="3" y="16" width="7" height="5" rx="1.5" />
         </svg>
       );
+    case "adm-basvurular":
+      return (
+        <svg {...common}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+        </svg>
+      );
     case "adm-siteler":
       return (
         <svg {...common}>

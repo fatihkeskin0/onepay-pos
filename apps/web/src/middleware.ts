@@ -70,7 +70,12 @@ function isExclusivePaymentHost(
 }
 
 function isMarketingContentPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/");
+  return (
+    pathname === "/" ||
+    pathname === "/docs" ||
+    pathname.startsWith("/docs/") ||
+    pathname === "/support"
+  );
 }
 
 export function middleware(request: NextRequest) {

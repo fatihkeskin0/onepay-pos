@@ -57,6 +57,7 @@ async function main() {
 
   const settings = [
     ["telegram_notify_deposit", "1"],
+    ["telegram_support_username", "onepos_support"],
     ["usd_rate", "34.50"],
   ] as const;
 

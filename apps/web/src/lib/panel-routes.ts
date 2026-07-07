@@ -6,6 +6,7 @@ export const PANEL_PUBLIC_SEGMENTS = [
   "dashboard",
   "deposit",
   "transactions",
+  "applications",
   "sites",
   "users",
   "cashiers",

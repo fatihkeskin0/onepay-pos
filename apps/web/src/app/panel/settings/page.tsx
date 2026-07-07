@@ -22,6 +22,33 @@ export default function SettingsPage() {
   const [twoFaCode, setTwoFaCode] = useState("");
   const [disablePassword, setDisablePassword] = useState("");
 
+  const [telegramUsername, setTelegramUsername] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!ready || !isAdmin) return;
+    setSettingsLoading(true);
+    API.get<{ settings: Record<string, string> }>("/admin/settings")
+      .then((d) => setTelegramUsername(d.settings.telegram_support_username ?? ""))
+      .catch(() => undefined)
+      .finally(() => setSettingsLoading(false));
+  }, [isAdmin, ready]);
+
+  const saveSiteSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      await API.post("/admin/update_settings", {
+        telegram_support_username: telegramUsername,
+      });
+      notify("Site ayarları kaydedildi", "success");
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Kaydedilemedi", "error");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!ready || isAdmin) return;
     API.get<{ enabled: boolean }>("/cashier/get_2fa_status")
@@ -91,15 +118,44 @@ export default function SettingsPage() {
         </div>
       </div>
       {!ready ? null : isAdmin ? (
-        <div className="card mb-4">
-          <h3 className="card-title-sm">POS Sağlayıcıları</h3>
-          <p className="settings-note">
-            Aktif yöntemler, min/max tutarlar ve varsayılan sağlayıcı POS Ayarları sayfasından yönetilir.
-          </p>
-          <Link href="/pos" className="btn btn-ghost">
-            POS Ayarları →
-          </Link>
-        </div>
+        <>
+          <div className="card mb-4">
+            <h3 className="card-title-sm">Site & Destek</h3>
+            <p className="settings-note mb-3">
+              Landing destek sayfasında gösterilecek Telegram kullanıcı adı. @ işareti olmadan yazın.
+            </p>
+            <div className="form-group">
+              <label className="form-label">Telegram destek kullanıcı adı</label>
+              <div className="input-affix">
+                <span className="input-affix-slot">@</span>
+                <input
+                  className="form-input"
+                  value={telegramUsername}
+                  onChange={(e) => setTelegramUsername(e.target.value.replace(/^@+/, ""))}
+                  disabled={settingsLoading || settingsSaving}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveSiteSettings}
+              disabled={settingsLoading || settingsSaving}
+            >
+              {settingsSaving ? "Kaydediliyor…" : "Kaydet"}
+            </button>
+          </div>
+          <div className="card mb-4">
+            <h3 className="card-title-sm">POS Sağlayıcıları</h3>
+            <p className="settings-note">
+              Aktif yöntemler, min/max tutarlar ve varsayılan sağlayıcı POS Ayarları sayfasından yönetilir.
+            </p>
+            <Link href="/pos" className="btn btn-ghost">
+              POS Ayarları →
+            </Link>
+          </div>
+        </>
       ) : (
         <>
           <div className="card mb-4">

@@ -97,18 +97,20 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
 
-    const [dep, suspicious, online] = await Promise.all([
+    const [dep, suspicious, online, applications] = await Promise.all([
       prisma.deposit.count({ where: { status: "pending" } }),
       prisma.deposit.count({ where: { isSuspicious: true, status: "pending" } }),
       prisma.cashier.count({
         where: { role: "kasiyer", lastSeenAt: { gte: new Date(Date.now() - 5 * 60 * 1000) } },
       }),
+      prisma.merchantApplication.count({ where: { status: "new" } }),
     ]);
 
     ok(reply, {
       deposits: dep,
       suspicious,
       online_kas: online,
+      applications,
     });
   });
 
@@ -364,9 +366,70 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!user) return;
     const body = request.body as Record<string, string>;
     for (const [key, value] of Object.entries(body)) {
-      await prisma.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+      let normalized = String(value ?? "");
+      if (key === "telegram_support_username") {
+        normalized = normalized.trim().replace(/^@+/, "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64);
+      }
+      await prisma.setting.upsert({ where: { key }, update: { value: normalized }, create: { key, value: normalized } });
       await invalidateSettingCache(key);
     }
+    ok(reply, {});
+  });
+
+  app.get("/applications", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    const q = request.query as { page?: string; status?: string };
+    const page = Math.max(1, Number(q.page ?? 1));
+    const limit = 20;
+    const status = q.status && q.status !== "all" ? q.status : undefined;
+    const where = status ? { status: status as "new" | "reviewed" | "archived" } : {};
+
+    const [items, total] = await Promise.all([
+      prisma.merchantApplication.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.merchantApplication.count({ where }),
+    ]);
+
+    ok(reply, {
+      items: items.map((a) => ({
+        id: a.id,
+        company_name: a.companyName,
+        contact_name: a.contactName,
+        email: a.email,
+        phone: a.phone,
+        message: a.message,
+        status: a.status,
+        ip: a.ip,
+        created_at: a.createdAt.toISOString(),
+      })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  });
+
+  app.post("/applications/update_status", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    const body = request.body as { id?: number; status?: string };
+    const id = Number(body.id);
+    const status = body.status;
+    if (!id || !status || !["new", "reviewed", "archived"].includes(status)) {
+      error(reply, "Geçersiz istek", 400);
+      return;
+    }
+
+    await prisma.merchantApplication.update({
+      where: { id },
+      data: { status: status as "new" | "reviewed" | "archived" },
+    });
     ok(reply, {});
   });
 

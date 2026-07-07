@@ -41,6 +41,7 @@ export const KASIYER_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { section: "Yönetim", id: "adm-dashboard", label: "Genel Bakış", icon: "📊" },
+  { section: "Yönetim", id: "adm-basvurular", label: "Başvurular", icon: "📝", badge: "nav-badge-applications" },
   { section: "Yönetim", id: "adm-siteler", label: "Siteler", icon: "🌐" },
   { section: "Yönetim", id: "adm-uyeler", label: "Kullanıcılar", icon: "👤" },
   { section: "Yönetim", id: "adm-kasiyerler", label: "Tüm Agentler", icon: "🧑‍💼" },
@@ -68,6 +69,7 @@ export const SLUG_TO_PAGE: Record<string, string> = {
   transactions: "transactions",
   duyurular: "duyurular",
   settings: "settings",
+  applications: "adm-basvurular",
   sites: "adm-siteler",
   users: "adm-uyeler",
   cashiers: "adm-kasiyerler",
@@ -90,6 +92,7 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-duyurular": "duyurular",
   "kas-sifre": "settings",
   "adm-ayarlar": "settings",
+  "adm-basvurular": "applications",
   "adm-siteler": "sites",
   "adm-uyeler": "users",
   "adm-kasiyerler": "cashiers",

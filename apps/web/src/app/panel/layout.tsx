@@ -52,13 +52,14 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     const poll = async () => {
       try {
         if (isAdmin) {
-          const data = await API.get<{ deposits: number; suspicious: number; online_kas: number }>(
+          const data = await API.get<{ deposits: number; suspicious: number; online_kas: number; applications: number }>(
             "/admin/badges",
           );
           setBadges({
             "nav-badge-adm-dep": data.deposits,
             "nav-badge-supheli": data.suspicious,
             "nav-badge-online-kas": data.online_kas,
+            "nav-badge-applications": data.applications,
           });
         } else {
           const data = await API.get<{ pending_deposits: number }>("/cashier/stats");

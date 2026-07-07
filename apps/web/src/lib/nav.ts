@@ -7,6 +7,7 @@ export const PAGE_HREF: Record<string, string> = {
   "kas-dep": panelHref("deposit"),
   "adm-export": panelHref("transactions"),
   "kas-export": panelHref("transactions"),
+  "adm-basvurular": panelHref("applications"),
   "adm-siteler": panelHref("sites"),
   "adm-uyeler": panelHref("users"),
   "adm-kasiyerler": panelHref("cashiers"),

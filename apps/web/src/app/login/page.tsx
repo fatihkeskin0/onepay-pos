@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LS_KEYS } from "@onepara/shared";
 import { API } from "@/lib/api";
-import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { AuthAlert } from "@/components/auth/AuthAlert";
+import { AuthField } from "@/components/auth/AuthField";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 
@@ -26,7 +26,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem(LS_KEYS.token)) {
+    const token = localStorage.getItem(LS_KEYS.token);
+    if (token) {
       router.replace("/dashboard");
     }
   }, [router]);
@@ -61,11 +62,12 @@ export default function LoginPage() {
         log_id?: number;
         requires_2fa?: boolean;
         partial_token?: string;
-      }>("/cashier/login", { username, password });
+      }>("/cashier/login", { username: username.trim(), password });
 
       if (data.requires_2fa && data.partial_token) {
         setPartialToken(data.partial_token);
         setStep("2fa");
+        setCode("");
         return;
       }
 
@@ -80,7 +82,7 @@ export default function LoginPage() {
         return;
       }
 
-      setError("Giriş tamamlanamadı. Tekrar deneyin.");
+      setError("Giriş tamamlanamadı. Lütfen tekrar deneyin.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Giriş başarısız");
     } finally {
@@ -99,10 +101,10 @@ export default function LoginPage() {
         username: string;
         theme?: string;
         log_id?: number;
-      }>("/cashier/verify_2fa", { partial_token: partialToken, code });
+      }>("/cashier/verify_2fa", { partial_token: partialToken, code: code.trim() });
       finishLogin(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Geçersiz kod");
+      setError(err instanceof Error ? err.message : "Doğrulama kodu geçersiz");
     } finally {
       setLoading(false);
     }
@@ -136,67 +138,81 @@ export default function LoginPage() {
 
       <div className="login-panel">
         <div className="login-card">
+          <div className="login-steps" aria-hidden>
+            <span className={`login-step ${step === "password" ? "login-step--active" : "login-step--done"}`} />
+            <span className={`login-step ${step === "2fa" ? "login-step--active" : ""}`} />
+          </div>
+
           <div className="login-card-header">
             <p className="login-card-kicker">OnePOS Panel</p>
-            <h2 className="login-panel-title">{step === "password" ? "Giriş yapın" : "Doğrulama kodu"}</h2>
+            <h2 className="login-panel-title">
+              {step === "password" ? "Hesabınıza giriş yapın" : "İki adımlı doğrulama"}
+            </h2>
             <p className="login-panel-hint">
               {step === "password"
-                ? "Hesabınıza erişmek için bilgilerinizi girin."
+                ? "Yönetim paneline erişmek için kullanıcı bilgilerinizi girin."
                 : "Authenticator uygulamanızdaki 6 haneli kodu girin."}
             </p>
           </div>
 
-          {error ? <div className="login-error">{error}</div> : null}
+          {error ? <AuthAlert message={error} /> : null}
 
           {step === "password" ? (
-            <form onSubmit={handleLogin} className="login-form">
-              <FormField label="Kullanıcı adı">
-                <Input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="username"
-                  placeholder="kullaniciadi"
-                  className="login-input"
-                  required
-                />
-              </FormField>
-              <FormField label="Şifre">
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="login-input"
-                  required
-                />
-              </FormField>
+            <form onSubmit={handleLogin} className="login-form" noValidate>
+              <AuthField
+                label="Kullanıcı adı"
+                fieldType="text"
+                name="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+                disabled={loading}
+              />
+              <AuthField
+                label="Şifre"
+                fieldType="password"
+                name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                disabled={loading}
+              />
               <Button type="submit" variant="primary" loading={loading} className="login-submit">
-                Giriş Yap
+                Giriş yap
               </Button>
             </form>
           ) : (
-            <form onSubmit={handle2fa} className="login-form">
-              <FormField label="2FA kodu">
-                <Input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  maxLength={6}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  className="login-input login-input--code"
-                  required
-                />
-              </FormField>
+            <form onSubmit={handle2fa} className="login-form" noValidate>
+              <AuthField
+                label="Doğrulama kodu"
+                fieldType="otp"
+                name="code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                hint="Google Authenticator veya benzeri uygulamadan alın."
+                required
+                disabled={loading}
+              />
               <Button type="submit" variant="primary" loading={loading} className="login-submit">
-                Doğrula
+                Doğrula ve devam et
               </Button>
-              <Button type="button" variant="ghost" className="login-back" onClick={backToPassword}>
-                Geri dön
+              <Button type="button" variant="ghost" className="login-back" onClick={backToPassword} disabled={loading}>
+                Farklı hesapla giriş yap
               </Button>
             </form>
           )}
+
+          <p className="login-footer-note">
+            Bu alan yalnızca yetkili kullanıcılar içindir. Tüm giriş denemeleri kayıt altına alınır.
+          </p>
         </div>
       </div>
     </div>

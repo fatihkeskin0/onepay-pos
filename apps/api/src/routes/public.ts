@@ -1,0 +1,73 @@
+import type { FastifyInstance } from "fastify";
+import { prisma } from "@onepara/db";
+import { ok, error } from "../services/response.js";
+import { byIp } from "../services/rate-limit.js";
+import { getSetting } from "../services/callback.js";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeTelegramUsername(raw: string | null | undefined): string {
+  const trimmed = String(raw ?? "").trim().replace(/^@+/, "");
+  return trimmed.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64);
+}
+
+export async function publicRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/landing-info", async (_request, reply) => {
+    const username = normalizeTelegramUsername(await getSetting("telegram_support_username"));
+    ok(reply, {
+      telegram_support_username: username || null,
+      telegram_url: username ? `https://t.me/${username}` : null,
+    });
+  });
+
+  app.post("/apply", async (request, reply) => {
+    if (!(await byIp(request, "apply", 5, 3600, reply))) return;
+
+    const body = request.body as {
+      company_name?: string;
+      contact_name?: string;
+      email?: string;
+      phone?: string;
+      message?: string;
+    };
+
+    const companyName = String(body.company_name ?? "").trim().slice(0, 200);
+    const contactName = String(body.contact_name ?? "").trim().slice(0, 120);
+    const email = String(body.email ?? "").trim().toLowerCase().slice(0, 200);
+    const phone = String(body.phone ?? "").trim().slice(0, 40);
+    const message = String(body.message ?? "").trim().slice(0, 2000) || null;
+
+    if (!companyName || !contactName || !email || !phone) {
+      error(reply, "Lütfen zorunlu alanları doldurun", 400);
+      return;
+    }
+
+    if (!EMAIL_RE.test(email)) {
+      error(reply, "Geçerli bir e-posta adresi girin", 400);
+      return;
+    }
+
+    if (phone.replace(/\D/g, "").length < 10) {
+      error(reply, "Geçerli bir telefon numarası girin", 400);
+      return;
+    }
+
+    const ip =
+      (request.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
+      request.ip ??
+      "";
+
+    await prisma.merchantApplication.create({
+      data: {
+        companyName,
+        contactName,
+        email,
+        phone,
+        message,
+        ip,
+      },
+    });
+
+    ok(reply, { submitted: true });
+  });
+}

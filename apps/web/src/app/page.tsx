@@ -1,5 +1,7 @@
-import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { ApplyForm } from "@/components/landing/ApplyForm";
+import { LandingShell } from "@/components/landing/LandingShell";
+import { TelegramSupportCard } from "@/components/landing/TelegramSupportCard";
 
 const TRUST_ITEMS = [
   { icon: "lock" as const, label: "256-bit SSL", desc: "Tüm veri trafiği şifrelenir" },
@@ -34,14 +36,7 @@ const STEPS = [
 
 export default function LandingPage() {
   return (
-    <div className="landing">
-      <header className="landing-header">
-        <div className="landing-brand">
-          <div className="landing-logo">OP</div>
-          <span className="landing-name">OnePOS</span>
-        </div>
-      </header>
-
+    <LandingShell active="home">
       <main className="landing-main">
         <section className="landing-hero">
           <div className="landing-hero-copy">
@@ -55,12 +50,6 @@ export default function LandingPage() {
               banka 3D Secure ile onaylar; siz sonucu anında görürsünüz. Şifreleme ve güvenlik
               standartları dahili — ek kurulum gerektirmez.
             </p>
-
-            <div className="landing-actions">
-              <Link href="/login" className="btn btn-primary landing-btn-primary">
-                Ödeme Almaya Başlayın
-              </Link>
-            </div>
 
             <div className="landing-pills">
               <span className="landing-pill">
@@ -132,23 +121,29 @@ export default function LandingPage() {
             ))}
           </div>
         </section>
-      </main>
 
-      <footer className="landing-footer">
-        <span className="landing-footer-brand">OnePOS</span>
-        <div className="landing-footer-badges">
-          <span className="landing-footer-badge">
-            <Icon name="lock" size={12} /> 256-bit SSL
-          </span>
-          <span className="landing-footer-badge">
-            <Icon name="shield" size={12} /> 3D Secure
-          </span>
-          <span className="landing-footer-badge">
-            <Icon name="card" size={12} /> Kart ödemesi
-          </span>
-        </div>
-        <span className="landing-footer-copy">Güvenli ödeme altyapısı</span>
-      </footer>
-    </div>
+        <section id="basvur" className="landing-apply">
+          <div className="landing-apply-copy">
+            <p className="landing-apply-kicker">Hemen Başvur</p>
+            <h2>OnePOS altyapısına katılın</h2>
+            <p>
+              Formu doldurun; başvurunuz yönetim paneline düşsün. Ekibimiz sizinle iletişime geçerek
+              onboarding sürecini başlatsın.
+            </p>
+          </div>
+          <div className="landing-apply-panel">
+            <ApplyForm />
+          </div>
+        </section>
+
+        <section className="landing-support-preview">
+          <div className="landing-support-preview-copy">
+            <h2>Özel Destek Altyapısı</h2>
+            <p>Kurumsal düzeyde iletişim kanalları aracılığıyla 7/24 özel yardım sağlıyoruz.</p>
+          </div>
+          <TelegramSupportCard />
+        </section>
+      </main>
+    </LandingShell>
   );
 }

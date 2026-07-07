@@ -1,11 +1,21 @@
 import { LS_KEYS } from "@onepara/shared";
+import { isPublicAuthPath } from "@/lib/auth-paths";
 
 const BASE = "/backend";
 
+function clearSessionKeepPreferences(): void {
+  const theme = localStorage.getItem(LS_KEYS.theme);
+  const seenAnn = localStorage.getItem(LS_KEYS.seenAnn);
+  localStorage.clear();
+  if (theme) localStorage.setItem(LS_KEYS.theme, theme);
+  if (seenAnn) localStorage.setItem(LS_KEYS.seenAnn, seenAnn);
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem(LS_KEYS.token) : null;
+  const publicAuth = isPublicAuthPath(path);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && !publicAuth) headers.Authorization = `Bearer ${token}`;
 
   let res: Response;
   try {
@@ -18,19 +28,26 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error("Sunucuya ulaşılamıyor");
   }
 
-  const data = (await res.json()) as { success: boolean; message: string; data: T };
-
-  if (res.status === 401) {
-    const theme = localStorage.getItem(LS_KEYS.theme);
-    const seenAnn = localStorage.getItem(LS_KEYS.seenAnn);
-    localStorage.clear();
-    if (theme) localStorage.setItem(LS_KEYS.theme, theme);
-    if (seenAnn) localStorage.setItem(LS_KEYS.seenAnn, seenAnn);
-    window.location.href = "/login";
-    throw new Error("Yetkisiz");
+  let data: { success: boolean; message: string; data: T };
+  try {
+    data = (await res.json()) as { success: boolean; message: string; data: T };
+  } catch {
+    throw new Error(res.ok ? "Geçersiz sunucu yanıtı" : "İstek başarısız");
   }
 
-  if (!data.success) throw new Error(data.message);
+  if (res.status === 401) {
+    if (token && !publicAuth) {
+      clearSessionKeepPreferences();
+      window.location.href = "/login";
+    }
+    throw new Error(data.message || "Yetkisiz");
+  }
+
+  if (res.status === 403) {
+    throw new Error(data.message || "Bu işlem için yetkiniz yok");
+  }
+
+  if (!data.success) throw new Error(data.message || "İstek başarısız");
   return data.data;
 }
 
@@ -45,16 +62,12 @@ export const API = {
   },
   logout: async () => {
     const logId = localStorage.getItem(LS_KEYS.logId);
-    const theme = localStorage.getItem(LS_KEYS.theme);
-    const seenAnn = localStorage.getItem(LS_KEYS.seenAnn);
     try {
       await API.post("/cashier/logout", { log_id: logId ? Number(logId) : undefined });
     } catch {
       /* ignore */
     }
-    localStorage.clear();
-    if (theme) localStorage.setItem(LS_KEYS.theme, theme);
-    if (seenAnn) localStorage.setItem(LS_KEYS.seenAnn, seenAnn);
+    clearSessionKeepPreferences();
     window.location.href = "/login";
   },
 };

@@ -9,6 +9,7 @@ import { cashierRoutes } from "./routes/cashier.js";
 import { adminRoutes } from "./routes/admin.js";
 import { pspRoutes } from "./routes/psp.js";
 import { bcRoutes } from "./routes/bc.js";
+import { publicRoutes } from "./routes/public.js";
 import { prisma } from "@onepara/db";
 import { pingRedis, waitForRedis } from "./services/redis.js";
 import { depositCancelled, depositUrl, getSiteCallback } from "./services/callback.js";
@@ -123,6 +124,7 @@ await app.register(cashierRoutes, { prefix: "/cashier" });
 await app.register(adminRoutes, { prefix: "/admin" });
 await app.register(pspRoutes, { prefix: "/psp" });
 await app.register(bcRoutes, { prefix: "/api" });
+await app.register(publicRoutes, { prefix: "/public" });
 
 setInterval(() => {
   autoCancelDeposits().catch(console.error);
