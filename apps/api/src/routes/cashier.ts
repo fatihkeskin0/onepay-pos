@@ -1,19 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import bcrypt from "bcryptjs";
-import { prisma, type Prisma } from "@onepara/db";
+import { prisma } from "@onepara/db";
 import {
   generateToken,
   requireAuth,
-  checkSubPerm,
   hashPassword,
   checkPassword,
-  generateApiKey,
 } from "../services/auth.js";
 import { ok, error } from "../services/response.js";
 import { byIp } from "../services/rate-limit.js";
 import { makePartialToken, verifyPartialToken, verifyTotp, generateSecret, getQrDataUrl } from "../services/totp.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
-import { depositApproved, depositRejected, depositUrl, getSiteCallback, getSetting } from "../services/callback.js";
+import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
 import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
 
 export async function cashierRoutes(app: FastifyInstance): Promise<void> {
@@ -23,27 +20,6 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as { username?: string; password?: string };
     const username = String(body.username ?? "").trim();
     const password = String(body.password ?? "");
-
-    const sub = await prisma.cashierSubUser.findUnique({ where: { username } });
-    if (sub) {
-      if (!sub.isActive || !(await checkPassword(password, sub.passwordHash))) {
-        error(reply, "Kullanıcı adı veya şifre hatalı", 401);
-        return;
-      }
-      const parent = await prisma.cashier.findUnique({ where: { id: sub.cashierId } });
-      if (!parent?.isActive) {
-        error(reply, "Hesap devre dışı", 401);
-        return;
-      }
-      const token = generateToken(parent.id, "sub_kasiyer", parent.siteId, sub.id, sub.username, parent.tokenVersion);
-      ok(reply, {
-        token,
-        role: "sub_kasiyer",
-        username: sub.username,
-        sub_perms: sub.permissions,
-      });
-      return;
-    }
 
     const cashier = await prisma.cashier.findUnique({ where: { username } });
     if (!cashier?.isActive || !(await checkPassword(password, cashier.passwordHash))) {
@@ -74,7 +50,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     });
 
     ok(reply, {
-      token: generateToken(cashier.id, cashier.role, cashier.siteId, 0, "", cashier.tokenVersion),
+      token: generateToken(cashier.id, cashier.role, cashier.siteId, cashier.tokenVersion),
       role: cashier.role,
       username: cashier.username,
       theme: cashier.theme,
@@ -102,7 +78,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     });
 
     ok(reply, {
-      token: generateToken(cashier.id, cashier.role, cashier.siteId, 0, "", cashier.tokenVersion),
+      token: generateToken(cashier.id, cashier.role, cashier.siteId, cashier.tokenVersion),
       role: cashier.role,
       username: cashier.username,
       theme: cashier.theme,
@@ -161,7 +137,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/approve_deposit", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user || !(await checkSubPerm(user, "deps_action", reply))) return;
+    if (!user) return;
 
     const body = request.body as { id?: number };
     const depositId = Number(body.id);
@@ -191,7 +167,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/reject_deposit", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user || !(await checkSubPerm(user, "deps_action", reply))) return;
+    if (!user) return;
 
     const body = request.body as { id?: number; reason?: string };
     const depositId = Number(body.id);
@@ -331,13 +307,12 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
     ok(reply, {
       new_deposits: newDeps,
-      chat_enabled: (await getSetting("chat_enabled")) !== "0",
       server_time: Math.floor(Date.now() / 1000),
     });
   });
 
   app.get("/profile", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin", "sub_kasiyer");
+    const user = await requireAuth(request, reply, "kasiyer", "admin");
     if (!user) return;
 
     const cashier = await prisma.cashier.findUnique({ where: { id: user.id } });
@@ -417,134 +392,8 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/announcements", async (request, reply) => {
-    await requireAuth(request, reply, "kasiyer", "admin", "sub_kasiyer");
+    await requireAuth(request, reply, "kasiyer", "admin");
     const items = await prisma.announcement.findMany({ where: { isActive: true }, orderBy: { createdAt: "desc" } });
     ok(reply, { items });
-  });
-
-  app.get("/chat", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin", "sub_kasiyer");
-    if (!user) return;
-
-    const since = (request.query as { since?: string }).since;
-    const messages = await prisma.chatMessage.findMany({
-      where: {
-        cashierId: user.id,
-        ...(since ? { createdAt: { gt: new Date(Number(since) * 1000) } } : {}),
-      },
-      orderBy: { createdAt: "asc" },
-      take: 100,
-    });
-    ok(reply, { messages });
-  });
-
-  app.post("/chat", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin", "sub_kasiyer");
-    if (!user) return;
-
-    const message = String((request.body as { message?: string }).message ?? "").trim();
-    if (!message) {
-      error(reply, "Mesaj boş", 422);
-      return;
-    }
-
-    const msg = await prisma.chatMessage.create({
-      data: {
-        cashierId: user.id,
-        sender: user.role === "admin" ? "admin" : "cashier",
-        senderName: user.sub_username ?? String(user.id),
-        message,
-      },
-    });
-    ok(reply, { message: msg });
-  });
-
-  app.get("/sub_users", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const items = await prisma.cashierSubUser.findMany({ where: { cashierId: user.id } });
-    ok(reply, { items });
-  });
-
-  app.post("/add_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const body = request.body as { username?: string; password?: string; display_name?: string; permissions?: object };
-    const sub = await prisma.cashierSubUser.create({
-      data: {
-        cashierId: user.id,
-        username: String(body.username),
-        passwordHash: await hashPassword(String(body.password)),
-        displayName: body.display_name ?? null,
-        permissions: body.permissions ?? {},
-      },
-    });
-    ok(reply, { sub });
-  });
-
-  app.post("/update_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const body = request.body as { id?: number; display_name?: string; permissions?: object };
-    const id = Number(body.id);
-    const existing = await prisma.cashierSubUser.findFirst({ where: { id, cashierId: user.id } });
-    if (!existing) {
-      error(reply, "Bulunamadı", 404);
-      return;
-    }
-    const sub = await prisma.cashierSubUser.update({
-      where: { id },
-      data: {
-        displayName: body.display_name ?? existing.displayName,
-        permissions: (body.permissions ?? existing.permissions) as Prisma.InputJsonValue,
-      },
-    });
-    ok(reply, { sub });
-  });
-
-  app.post("/toggle_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const id = Number((request.body as { id?: number }).id);
-    const sub = await prisma.cashierSubUser.findFirst({ where: { id, cashierId: user.id } });
-    if (!sub) {
-      error(reply, "Bulunamadı", 404);
-      return;
-    }
-    const updated = await prisma.cashierSubUser.update({
-      where: { id },
-      data: { isActive: !sub.isActive },
-    });
-    ok(reply, { sub: updated });
-  });
-
-  app.post("/delete_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const id = Number((request.body as { id?: number }).id);
-    const sub = await prisma.cashierSubUser.findFirst({ where: { id, cashierId: user.id } });
-    if (!sub) {
-      error(reply, "Bulunamadı", 404);
-      return;
-    }
-    await prisma.cashierSubUser.delete({ where: { id } });
-    ok(reply, {});
-  });
-
-  app.post("/reset_sub_password", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer");
-    if (!user) return;
-    const body = request.body as { id?: number; new_password?: string };
-    const id = Number(body.id);
-    const sub = await prisma.cashierSubUser.findFirst({ where: { id, cashierId: user.id } });
-    if (!sub) {
-      error(reply, "Bulunamadı", 404);
-      return;
-    }
-    const updated = await prisma.cashierSubUser.update({
-      where: { id },
-      data: { passwordHash: await hashPassword(String(body.new_password)) },
-    });
-    ok(reply, { sub: updated });
   });
 }

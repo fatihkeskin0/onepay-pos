@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "OnePOS — Güvenli Ödeme Altyapısı",
-  description: "Kredi kartı POS altyapısı — 3D Secure, 256-bit SSL, PSP entegrasyonu",
+  title: "OnePOS — Güvenli Kart Ödemesi",
+  description: "Kredi kartı ile güvenle ödeme alın. 3D Secure, SSL şifreleme ve anlık sonuç bildirimi.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

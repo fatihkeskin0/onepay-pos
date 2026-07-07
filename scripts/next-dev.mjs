@@ -8,6 +8,8 @@ const root = path.join(__dirname, "..");
 const webRoot = path.join(root, "apps/web");
 const nextDir = path.join(webRoot, ".next");
 const PORT = 3105;
+const API_PORT = Number(process.env.API_PORT ?? 4105);
+const API_HEALTH_URL = `http://127.0.0.1:${API_PORT}/health`;
 
 const FATAL_PATTERNS = [
   /Cannot find module '\.\/\d+\.js'/,
@@ -19,6 +21,8 @@ const FATAL_PATTERNS = [
 ];
 
 let child = null;
+let apiChild = null;
+let spawnedApi = false;
 let restarting = false;
 let restartCount = 0;
 const MAX_RESTARTS = 8;
@@ -31,17 +35,89 @@ function cleanNext() {
   }
 }
 
-function killChild() {
-  if (!child || child.killed) return;
+function killProcess(proc) {
+  if (!proc || proc.killed) return;
   try {
     if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", String(child.pid), "/f", "/t"], { stdio: "ignore", shell: true });
+      spawn("taskkill", ["/pid", String(proc.pid), "/f", "/t"], { stdio: "ignore", shell: true });
     } else {
-      child.kill("SIGTERM");
+      proc.kill("SIGTERM");
     }
   } catch {
     /* ignore */
   }
+}
+
+function killChild() {
+  killProcess(child);
+}
+
+function killApiChild() {
+  if (!spawnedApi) return;
+  killProcess(apiChild);
+  apiChild = null;
+  spawnedApi = false;
+}
+
+async function isApiUp() {
+  try {
+    const res = await fetch(API_HEALTH_URL, {
+      signal: AbortSignal.timeout(1500),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForApi(maxAttempts = 30) {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    if (await isApiUp()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  return false;
+}
+
+function startApi() {
+  apiChild = spawn("pnpm", ["--filter", "@onepara/api", "dev"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+    env: { ...process.env, FORCE_COLOR: "1" },
+  });
+  spawnedApi = true;
+
+  apiChild.on("exit", (code, signal) => {
+    if (signal === "SIGTERM" || signal === "SIGKILL") return;
+    if (code && code !== 0 && !restarting) {
+      console.error(`[web-dev] API exited with code ${code}`);
+    }
+  });
+}
+
+async function ensureApi() {
+  if (await isApiUp()) {
+    console.log(`[web-dev] API already running on :${API_PORT}`);
+    return;
+  }
+
+  console.log("[web-dev] API not running — building @onepara/db and starting API...");
+  spawnSync("pnpm", ["--filter", "@onepara/db", "build"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+  });
+
+  startApi();
+
+  const ready = await waitForApi();
+  if (!ready) {
+    console.error(`[web-dev] API did not become ready on :${API_PORT}. Check DATABASE_URL / Redis.`);
+    process.exit(1);
+  }
+
+  console.log(`[web-dev] API ready on :${API_PORT}`);
 }
 
 function startNext(clean = false) {
@@ -120,6 +196,7 @@ spawnSync("pnpm", ["--filter", "@onepara/shared", "build"], {
   shell: true,
 });
 
+await ensureApi();
 startNext(cleanOnStart);
 const healthTimer = setInterval(() => {
   void healthCheck();
@@ -128,6 +205,7 @@ const healthTimer = setInterval(() => {
 function shutdown() {
   clearInterval(healthTimer);
   killChild();
+  killApiChild();
   process.exit(0);
 }
 

@@ -1,26 +1,25 @@
-export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `POST /backend/user/create_payment_link
-Header: X-API-Key: {site_api_key}
-Content-Type: application/json
-
-{
+export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location 'https://api.onekart.info/user/create_payment_link' \\
+--header 'Content-Type: application/json' \\
+--header 'X-Api-Key: {site_api_key}' \\
+--data-raw '{
   "user_id": "customer_12345",
-  "name": "Ahmet Yılmaz",
   "amount": 1500,
   "return_url": "https://merchant.example.com/deposit/return",
-  "transaction_id": "ext-ref-001"
-}`;
+  "transaction_id": "ext-ref-001",
+  "name": "Ahmet Yilmaz"
+}'`;
 
 export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
   "success": true,
   "message": "ok",
   "data": {
     "token": "a1b2c3d4e5f6789012345678abcdef01",
-    "url": "https://pay.example.com/pay/a1b2c3d4e5f6789012345678abcdef01",
+    "url": "https://odeme.click/pay/a1b2c3d4e5f6789012345678abcdef01",
     "expires_at": "2026-07-05 18:45:00"
   }
 }`;
 
-export const SAMPLE_DEPOSIT_STATUS_REQ = `GET /backend/user/deposit_status?ref={reference}&token={deposit_token}`;
+export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location 'https://api.onekart.info/user/deposit_status?ref={reference}&token={deposit_token}'`;
 
 export const SAMPLE_DEPOSIT_STATUS_RES = `{
   "success": true,
@@ -30,19 +29,16 @@ export const SAMPLE_DEPOSIT_STATUS_RES = `{
     "amount": 1500,
     "reference": "20260705143052001",
     "reject_reason": null,
-    "remaining_seconds": 0,
-    "redirect_url": null,
-    "provider": "stripe"
+    "remaining_seconds": 0
   }
 }`;
 
-export const SAMPLE_CANCEL_DEPOSIT_REQ = `POST /backend/user/cancel_deposit
-Content-Type: application/json
-
-{
+export const SAMPLE_CANCEL_DEPOSIT_REQ = `curl --location 'https://api.onekart.info/user/cancel_deposit' \\
+--header 'Content-Type: application/json' \\
+--data-raw '{
   "ref": "20260705143052001",
-  "token": "64hex_deposit_token..."
-}`;
+  "token": "{deposit_token}"
+}'`;
 
 export const SAMPLE_CANCEL_DEPOSIT_RES = `{
   "success": true,
@@ -65,11 +61,10 @@ Content-Type: application/json
   "CheckSum": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
 }`;
 
-export const SAMPLE_BC_CALLBACK_RESPONSE = `HTTP 200 OK
-{ "success": true }`;
+export const SAMPLE_BC_CALLBACK_RESPONSE = `HTTP 200 OK`;
 
 export const SAMPLE_CHECKSUM = `canonical = TraderKey + TransactionID + UserCode + Amount + StatusCode + UnixTime
-expected  = HMAC-SHA256(canonical, site_api_key).toLowerCase() hex
+CheckSum  = HMAC-SHA256(canonical, site_api_key).toLowerCase() hex
 
-// Amount always 2 decimal places: "1500.00"
+// Amount always 2 decimal places: 1000 -> "1000.00"
 // Verify CheckSum before updating customer balance`;

@@ -99,7 +99,6 @@ model Cashier {
   ipLockEnabled          Boolean          @default(true) @map("ip_lock_enabled")
   adminNote              String?          @map("admin_note") @db.Text
   commissionCredited     Decimal          @default(0) @map("commission_credited") @db.Decimal(12, 2)
-  subUsers               CashierSubUser[]
   cashierSites           CashierSite[]
   deposits               Deposit[]
   auditLogs              AuditLog[]
@@ -107,23 +106,6 @@ model Cashier {
   chatMessages           ChatMessage[]
 
   @@map("cashiers")
-}
-
-model CashierSubUser {
-  id           Int       @id @default(autoincrement())
-  cashierId    Int       @map("cashier_id")
-  username     String    @unique @db.VarChar(60)
-  passwordHash String    @map("password_hash") @db.VarChar(255)
-  displayName  String?   @map("display_name") @db.VarChar(100)
-  isActive     Boolean   @default(true) @map("is_active")
-  lastLogin    DateTime? @map("last_login")
-  lastSeenAt   DateTime? @map("last_seen_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  permissions  Json?
-  cashier      Cashier   @relation(fields: [cashierId], references: [id])
-
-  @@index([cashierId])
-  @@map("cashier_sub_users")
 }
 
 model CashierSite {
@@ -151,8 +133,6 @@ model Deposit {
   createdAt                DateTime      @default(now()) @map("created_at")
   isSuspicious             Boolean       @default(false) @map("is_suspicious")
   suspiciousReason         String?       @map("suspicious_reason") @db.VarChar(255)
-  processedBySubId         Int?          @map("processed_by_sub_id")
-  processedBySubUsername   String?       @map("processed_by_sub_username") @db.VarChar(100)
   processedByAdminUsername String?       @map("processed_by_admin_username") @db.VarChar(100)
   externalId               String?       @map("external_id") @db.VarChar(128)
   pspProvider              String?       @map("psp_provider") @db.VarChar(30)

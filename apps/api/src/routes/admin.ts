@@ -9,6 +9,7 @@ import { depositApproved, depositRejected, depositUrl, getSiteCallback, invalida
 import { invalidatePosMethodsCache, listPosMethodsWithMeta, activateSinglePosMethod, deactivatePosMethod } from "../services/pos-methods.js";
 import { isKnownProvider } from "../services/psp/index.js";
 import { formatBcExpiry } from "../services/format.js";
+import { getActivityLogs } from "../services/activity-log.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -96,20 +97,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
 
-    const [dep, suspicious, online, chatUnread] = await Promise.all([
+    const [dep, suspicious, online] = await Promise.all([
       prisma.deposit.count({ where: { status: "pending" } }),
       prisma.deposit.count({ where: { isSuspicious: true, status: "pending" } }),
       prisma.cashier.count({
         where: { role: "kasiyer", lastSeenAt: { gte: new Date(Date.now() - 5 * 60 * 1000) } },
       }),
-      prisma.chatMessage.count({ where: { sender: "cashier", readAt: null } }),
     ]);
 
     ok(reply, {
       deposits: dep,
       suspicious,
       online_kas: online,
-      chat_unread: chatUnread,
     });
   });
 
@@ -333,54 +332,24 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get("/all_sub_users", async (request, reply) => {
+  app.get("/logs", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
-    const items = await prisma.cashierSubUser.findMany({ include: { cashier: { select: { username: true } } } });
-    ok(reply, { items });
-  });
-
-  app.post("/toggle_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const id = Number((request.body as { id?: number }).id);
-    const sub = await prisma.cashierSubUser.findUnique({ where: { id } });
-    if (!sub) {
-      error(reply, "Bulunamadı", 404);
-      return;
-    }
-    const updated = await prisma.cashierSubUser.update({
-      where: { id },
-      data: { isActive: !sub.isActive },
+    const q = request.query as {
+      page?: string;
+      limit?: string;
+      category?: string;
+      user_id?: string;
+      q?: string;
+    };
+    const result = await getActivityLogs({
+      page: q.page ? Number(q.page) : 1,
+      limit: q.limit ? Number(q.limit) : 50,
+      category: q.category,
+      user_id: q.user_id,
+      q: q.q,
     });
-    ok(reply, { sub: updated });
-  });
-
-  app.post("/delete_sub_user", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const id = Number((request.body as { id?: number }).id);
-    await prisma.cashierSubUser.delete({ where: { id } });
-    ok(reply, {});
-  });
-
-  app.post("/reset_sub_password", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const body = request.body as { id?: number; new_password?: string };
-    const id = Number(body.id);
-    const updated = await prisma.cashierSubUser.update({
-      where: { id },
-      data: { passwordHash: await hashPassword(String(body.new_password)) },
-    });
-    ok(reply, { sub: updated });
-  });
-
-  app.get("/login_logs", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const items = await prisma.loginLog.findMany({ orderBy: { loggedInAt: "desc" }, take: 100 });
-    ok(reply, { items });
+    ok(reply, result);
   });
 
   app.get("/settings", async (request, reply) => {
@@ -519,52 +488,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "desc" },
     });
     ok(reply, { items });
-  });
-
-  app.get("/chat_list", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const cashiers = await prisma.cashier.findMany({
-      where: { role: "kasiyer", isActive: true },
-      select: { id: true, username: true },
-    });
-    const unread = await prisma.chatMessage.groupBy({
-      by: ["cashierId"],
-      where: { sender: "cashier", readAt: null },
-      _count: true,
-    });
-    ok(reply, { cashiers, unread });
-  });
-
-  app.get("/chat", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const cashierId = Number((request.query as { cashier_id?: string }).cashier_id);
-    const messages = await prisma.chatMessage.findMany({
-      where: { cashierId },
-      orderBy: { createdAt: "asc" },
-      take: 200,
-    });
-    await prisma.chatMessage.updateMany({
-      where: { cashierId, sender: "cashier", readAt: null },
-      data: { readAt: new Date() },
-    });
-    ok(reply, { messages });
-  });
-
-  app.post("/chat", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const body = request.body as { cashier_id?: number; message?: string };
-    const msg = await prisma.chatMessage.create({
-      data: {
-        cashierId: Number(body.cashier_id),
-        sender: "admin",
-        senderName: "Admin",
-        message: String(body.message),
-      },
-    });
-    ok(reply, { message: msg });
   });
 
   app.get("/reconciliation", async (request, reply) => {
@@ -708,7 +631,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const userId = String(body.user_id ?? "demo_user");
     const userName = String(body.name ?? "Demo Müşteri");
     let amount = body.amount != null ? Number(body.amount) : 0;
-    const returnUrl = body.return_url ? String(body.return_url) : `${config.app.baseUrl}/panel/demo`;
+    const returnUrl = body.return_url ? String(body.return_url) : `${config.app.baseUrl}/demo`;
 
     if (!siteId) {
       error(reply, "site_id gerekli", 422);

@@ -27,12 +27,15 @@
   --color-text-muted: var(--muted);
   --color-focus-ring: rgba(37, 99, 235, 0.45);
 
-  /* Sidebar (dark shell) */
-  --shell-bg: #0B1220;
-  --shell-border: rgba(255, 255, 255, 0.06);
-  --shell-text: #94A3B8;
-  --shell-text-active: #F8FAFC;
-  --shell-muted: #64748B;
+  /* Sidebar (always light) */
+  --shell-bg: #FFFFFF;
+  --shell-border: #E2E8F0;
+  --shell-text: #475569;
+  --shell-text-active: #0F172A;
+  --shell-muted: #94A3B8;
+  --shell-hover: #F8FAFC;
+  --shell-active: #EFF6FF;
+  --shell-active-border: #BFDBFE;
 
   /* Typography */
   --font-sans: var(--font-inter, 'Inter'), system-ui, sans-serif;
@@ -135,7 +138,14 @@
   --purple: #A78BFA;
   --blue: #60A5FA;
   --color-focus-ring: rgba(96, 165, 250, 0.45);
-  --shell-bg: #060D18;
+  --shell-bg: #FFFFFF;
+  --shell-border: #E2E8F0;
+  --shell-text: #475569;
+  --shell-text-active: #0F172A;
+  --shell-muted: #94A3B8;
+  --shell-hover: #F8FAFC;
+  --shell-active: #EFF6FF;
+  --shell-active-border: #BFDBFE;
   --table-row-hover: rgba(59, 130, 246, 0.08);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);

@@ -56,7 +56,6 @@ async function main() {
   });
 
   const settings = [
-    ["chat_enabled", "1"],
     ["telegram_notify_deposit", "1"],
     ["usd_rate", "34.50"],
   ] as const;

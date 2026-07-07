@@ -1,0 +1,52 @@
+.error-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -20%, rgba(37, 99, 235, 0.1), transparent),
+    var(--bg);
+}
+
+.error-page--panel {
+  background: var(--bg);
+}
+
+.error-card {
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  padding: var(--space-8) var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(15, 23, 42, 0.06));
+}
+
+.error-code {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: var(--space-3);
+}
+
+.error-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.02em;
+}
+
+.error-desc {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: var(--space-6);
+}

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Select } from "@/components/ui/Select";
-import { getDocsContent, LOCALE_OPTIONS } from "./content";
+import { getDocsContent } from "./content";
 import { SAMPLE_BC_CALLBACK, SAMPLE_BC_CALLBACK_RESPONSE } from "./shared-samples";
 import type {
   DocsContent,
   DocsEndpointDoc,
+  DocsErrorRow,
   DocsLocale,
+  DocsMetaItem,
   DocsParamRow,
   DocsStatusPill,
 } from "./types";
@@ -129,14 +130,67 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
   );
 }
 
+function MetaBlock({ items }: { items: DocsMetaItem[] }) {
+  return (
+    <div className="docs-meta">
+      {items.map((m) => (
+        <div key={m.label} className="docs-meta-item">
+          <span className="docs-meta-label">{m.label}</span>
+          <span className="docs-meta-value">{m.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ErrorTable({
+  title,
+  errors,
+  locale,
+}: {
+  title: string;
+  errors: DocsErrorRow[];
+  locale: DocsLocale;
+}) {
+  const headers = locale === "tr" ? ["HTTP", "Açıklama"] : ["HTTP", "Description"];
+  return (
+    <>
+      <div className="docs-param-title">{title}</div>
+      <div className="docs-table-wrap">
+        <table className="docs-table">
+          <thead>
+            <tr>
+              {headers.map((h) => (
+                <th key={h}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {errors.map((e) => (
+              <tr key={e.code}>
+                <td>
+                  <code>{e.code}</code>
+                </td>
+                <td>{e.description}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 function EndpointBlock({ ep, locale }: { ep: DocsEndpointDoc; locale: DocsLocale }) {
   return (
     <div className="docs-endpoint-block" id={ep.id}>
+      <h3 className="docs-endpoint-title">{ep.title}</h3>
       <div className="docs-endpoint-head">
         <MethodBadge method={ep.method} />
         <strong>{ep.path}</strong>
       </div>
       <p className="docs-endpoint-desc">{ep.description}</p>
+      <MetaBlock items={ep.meta} />
       <ParamTable title={ep.paramTitle} params={ep.params} locale={locale} />
       {ep.statusPills ? <StatusPills pills={ep.statusPills} locale={locale} /> : null}
       {ep.notes?.map((note) => (
@@ -150,6 +204,7 @@ function EndpointBlock({ ep, locale }: { ep: DocsEndpointDoc; locale: DocsLocale
         <CodeBlock label={ep.requestLabel} code={ep.requestSample} />
         <CodeBlock label={ep.responseLabel} code={ep.responseSample} />
       </div>
+      <ErrorTable title={ep.errorTitle} errors={ep.errors} locale={locale} />
     </div>
   );
 }
@@ -181,34 +236,6 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
         </div>
       </section>
 
-      <section className="docs-block" id="endpoint-summary">
-        <h2 className="docs-h2">{c.endpointSummary.title}</h2>
-        <div className="docs-table-wrap">
-          <table className="docs-table docs-table--summary">
-            <thead>
-              <tr>
-                {c.endpointSummary.headers.map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {c.endpointSummary.rows.map((row) => (
-                <tr key={row.endpoint}>
-                  <td>
-                    <MethodBadge method={row.method} />
-                  </td>
-                  <td>
-                    <code>{row.endpoint}</code>
-                  </td>
-                  <td className="docs-muted">{row.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <section className="docs-block" id="api-endpoints">
         <h2 className="docs-h2">{c.endpointsSectionTitle}</h2>
         {c.endpoints.map((ep) => (
@@ -216,40 +243,9 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
         ))}
       </section>
 
-      <section className="docs-block" id="integration-flow">
-        <h2 className="docs-h2">{c.flow.title}</h2>
-        <div className="docs-flow-diagram">
-          <div className="docs-flow-diagram-title">{c.webhook.flowTitle}</div>
-          <div className="docs-flow-diagram-steps">
-            {c.flow.steps.map((step, i) => (
-              <span key={step} className="docs-flow-diagram-item">
-                {i > 0 ? <span className="docs-flow-arrow">→</span> : null}
-                {step}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="docs-block" id="webhook">
         <h2 className="docs-h2">{c.webhook.title}</h2>
         <p className="docs-text">{c.webhook.intro}</p>
-
-        <div className="docs-flow-banner">
-          <div className="docs-flow-banner-title">{c.webhook.flowTitle}</div>
-          <div className="docs-flow-banner-row">
-            {c.webhook.flowSteps.map((step, i) => (
-              <span key={step} className="docs-flow-banner-step">
-                {i > 0 && i % 2 === 1 ? <span className="docs-flow-banner-arrow">→</span> : null}
-                {i % 2 === 1 ? (
-                  <span className="docs-flow-banner-label">{step}</span>
-                ) : (
-                  <span className="docs-flow-banner-node">{step}</span>
-                )}
-              </span>
-            ))}
-          </div>
-        </div>
 
         <div className="docs-param-title">{c.webhook.tableTitle}</div>
         <div className="docs-table-wrap">
@@ -297,31 +293,6 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
               <li key={item}>{item}</li>
             ))}
           </ul>
-        </div>
-      </section>
-
-      <section className="docs-block" id="errors">
-        <h2 className="docs-h2">{c.errors.title}</h2>
-        <p className="docs-text">{c.errors.intro}</p>
-        <div className="docs-table-wrap">
-          <table className="docs-table">
-            <thead>
-              <tr>
-                {c.errors.tableHeaders.map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {c.errors.rows.map((row, i) => (
-                <tr key={i}>
-                  {row.cells.map((cell, j) => (
-                    <td key={j}>{cell}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </section>
     </main>
@@ -373,22 +344,23 @@ export function DocsPageClient() {
           <span>OnePOS API</span>
         </div>
         <nav className="docs-nav">
-          <div className="docs-lang">
-            <Select
-              className="docs-lang-select"
-              value={locale}
-              onChange={(e) => onLocaleChange(e.target.value as DocsLocale)}
-              aria-label="Documentation language"
+          <div className="docs-lang" role="group" aria-label="Documentation language">
+            <button
+              type="button"
+              className={`docs-lang-btn ${locale === "tr" ? "active" : ""}`}
+              onClick={() => onLocaleChange("tr")}
             >
-              {LOCALE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
+              TR
+            </button>
+            <button
+              type="button"
+              className={`docs-lang-btn ${locale === "en" ? "active" : ""}`}
+              onClick={() => onLocaleChange("en")}
+            >
+              EN
+            </button>
           </div>
           <Link href="/">{c.nav.home}</Link>
-          <Link href="/panel">{c.nav.panel}</Link>
         </nav>
       </header>
 

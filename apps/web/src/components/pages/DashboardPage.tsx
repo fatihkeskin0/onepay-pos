@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { API } from "@/lib/api";
 import { PAGE_HREF } from "@/lib/nav";
+import { panelHref } from "@/lib/panel-routes";
 import { useClientSession } from "@/hooks/useClientSession";
 import { useClientTodayLabel } from "@/hooks/useClientTodayLabel";
 import { Icon } from "@/components/ui/Icon";
@@ -129,7 +130,7 @@ export default function DashboardPage() {
       suffix: "",
       icon: "pending",
       tone: "dash-stat--amber",
-      href: PAGE_HREF["adm-dep"] ?? "/panel/deposit",
+      href: PAGE_HREF["adm-dep"] ?? panelHref("deposit"),
     },
     {
       key: "approved",
@@ -290,7 +291,7 @@ export default function DashboardPage() {
         <section className="dash-panel dash-panel--wide">
           <div className="dash-panel-head">
             <h2>Son İşlemler</h2>
-            <Link href={PAGE_HREF["adm-dep"] ?? "/panel/deposit"} className="dash-link">
+            <Link href={PAGE_HREF["adm-dep"] ?? panelHref("deposit")} className="dash-link">
               Tümünü gör →
             </Link>
           </div>

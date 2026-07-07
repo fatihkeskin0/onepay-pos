@@ -100,3 +100,18 @@
 .qr-wrap { text-align: center; margin-bottom: var(--space-4); }
 .perm-label { display: block; margin-bottom: var(--space-1); font-size: var(--text-sm); }
 .cursor-pointer { cursor: pointer; }
+
+.logs-filters { display: flex; flex-direction: column; gap: var(--space-4); }
+.logs-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.logs-search-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.logs-input { max-width: 160px; }
+.logs-input-wide { flex: 1; min-width: 180px; max-width: 320px; }
+.logs-detail { max-width: 280px; word-break: break-word; font-size: var(--text-sm); }
+.logs-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.logs-page-info { font-size: var(--text-sm); color: var(--muted); }

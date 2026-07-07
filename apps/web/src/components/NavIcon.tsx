@@ -56,15 +56,6 @@ export function NavIcon({ id, active, size = 18 }: NavIconProps) {
           <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
         </svg>
       );
-    case "adm-personel":
-    case "kas-personel":
-      return (
-        <svg {...common}>
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      );
     case "adm-dep":
     case "kas-dep":
     case "adm-demo":
@@ -154,8 +145,6 @@ function roleLabel(role: string | null): string {
       return "Yönetici";
     case "kasiyer":
       return "Agent";
-    case "sub_kasiyer":
-      return "Personel";
     case "wd_manager":
       return "WD Yönetici";
     default:

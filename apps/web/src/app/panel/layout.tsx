@@ -5,8 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ADMIN_NAV, KASIYER_NAV, LS_KEYS, type NavItem } from "@onepara/shared";
 import { API } from "@/lib/api";
-import { PAGE_HREF } from "@/lib/nav";
-import { ChatWidget } from "@/components/ChatWidget";
+import { PAGE_HREF, DEFAULT_PANEL_HREF } from "@/lib/nav";
 import { NavIcon, roleLabel } from "@/components/NavIcon";
 import { useClientSession } from "@/hooks/useClientSession";
 
@@ -14,23 +13,11 @@ function LogoIcon({ small }: { small?: boolean }) {
   return <div className={`logo-icon ${small ? "logo-icon-sm" : ""}`.trim()}>OP</div>;
 }
 
-function filterNav(items: NavItem[], role: string): NavItem[] {
-  let filtered = items;
+function filterNav(items: NavItem[]): NavItem[] {
   if (process.env.NODE_ENV === "production") {
-    filtered = filtered.filter((item) => !item.devOnly);
+    return items.filter((item) => !item.devOnly);
   }
-  if (role !== "sub_kasiyer") return filtered;
-  let perms: Record<string, boolean> = {};
-  try {
-    perms = JSON.parse(localStorage.getItem(LS_KEYS.subPerms) ?? "{}");
-  } catch {
-    perms = {};
-  }
-  return filtered.filter((item) => {
-    if (item.hiddenForSub) return false;
-    if (item.perm && perms[item.perm] === false) return false;
-    return true;
-  });
+  return items;
 }
 
 function groupNav(items: NavItem[]): { section: string; items: NavItem[] }[] {
@@ -97,7 +84,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     }
   };
 
-  const nav = filterNav(isAdmin ? ADMIN_NAV : KASIYER_NAV, role ?? "");
+  const nav = filterNav(isAdmin ? ADMIN_NAV : KASIYER_NAV);
   const navGroups = useMemo(() => groupNav(nav), [nav]);
 
   if (!ready) {
@@ -141,7 +128,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
                 <div className="nav-section">{group.section}</div>
                 <div className="nav-group-items">
                   {group.items.map((item) => {
-                    const href = PAGE_HREF[item.id] ?? "/panel/dashboard";
+                    const href = PAGE_HREF[item.id] ?? DEFAULT_PANEL_HREF;
                     const active = pathname === href || pathname.startsWith(`${href}/`);
                     const badgeCount = item.badge ? badges[item.badge] : 0;
                     return (
@@ -188,7 +175,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         </aside>
         <main className="content" id="content-area">
           {children}
-          <ChatWidget />
         </main>
       </div>
     </>

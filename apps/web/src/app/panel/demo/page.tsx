@@ -103,7 +103,7 @@ export default function DemoPage() {
         <Card title="Demo oturumu oluştur">
           <p className="demo-hint">
             Seçilen site için gerçek API akışıyla ödeme linki üretilir. Aktif bir POS yöntemi gerekir (
-            <Link href="/panel/pos">POS Ayarları</Link>).
+            <Link href="/pos">POS Ayarları</Link>).
           </p>
 
           <FormField label="Site">
@@ -188,7 +188,7 @@ export default function DemoPage() {
           <li>Ödeme linki oluştur → müşteri ödeme sayfası açılır</li>
           <li>Tutar ve POS yöntemini seç → PSP ödeme ekranına yönlendirilir</li>
           <li>Ödeme tamamlanır → yatırım otomatik onaylanır</li>
-          <li>Sonucu <Link href="/panel/deposit">Yatırımlar</Link> ekranından takip edin</li>
+          <li>Sonucu <Link href="/deposit">Yatırımlar</Link> ekranından takip edin</li>
         </ol>
       </Card>
     </>

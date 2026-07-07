@@ -10,8 +10,3 @@ export const DOCS_CONTENT = {
 export function getDocsContent(locale: DocsLocale) {
   return DOCS_CONTENT[locale];
 }
-
-export const LOCALE_OPTIONS: { value: DocsLocale; label: string }[] = [
-  { value: "tr", label: "Türkçe" },
-  { value: "en", label: "English" },
-];

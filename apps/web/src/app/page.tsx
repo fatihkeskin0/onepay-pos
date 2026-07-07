@@ -2,25 +2,34 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 
 const TRUST_ITEMS = [
-  { icon: "lock" as const, label: "256-bit SSL", desc: "Uçtan uca şifreli iletişim" },
-  { icon: "shield" as const, label: "3D Secure", desc: "Banka doğrulamalı kart ödemesi" },
-  { icon: "card" as const, label: "PSP API", desc: "PayTR · Stripe · SumUp entegrasyonu" },
-  { icon: "success" as const, label: "Anlık Onay", desc: "Webhook ile otomatik yatırım onayı" },
+  { icon: "lock" as const, label: "256-bit SSL", desc: "Tüm veri trafiği şifrelenir" },
+  { icon: "shield" as const, label: "3D Secure", desc: "Banka onaylı kart doğrulama" },
+  { icon: "card" as const, label: "Kredi & Banka Kartı", desc: "Visa, Mastercard ve Troy" },
+  { icon: "success" as const, label: "Anlık Sonuç", desc: "Onay ve red bildirimi saniyeler içinde" },
 ];
 
 const FEATURES = [
   {
-    title: "Güvenli Ödeme Altyapısı",
-    desc: "Kredi kartı yatırımları için hazır POS katmanı. Müşteri tek arayüzde kalır; ödeme PSP API üzerinden işlenir.",
+    icon: "card" as const,
+    title: "Tek tıkla ödeme sayfası",
+    desc: "Müşterinize özel güvenli link gönderin. Kart bilgileri yalnızca şifreli kanallardan iletilir.",
   },
   {
-    title: "3D Secure & SSL",
-    desc: "Banka 3D doğrulaması ve 256-bit SSL ile kart verisi korumalı kanallardan geçer. PCI uyumlu sağlayıcı altyapısı.",
+    icon: "shield" as const,
+    title: "Uçtan uca koruma",
+    desc: "3D Secure, SSL ve PCI uyumlu altyapı ile kart verisi üçüncü taraflarla paylaşılmaz.",
   },
   {
-    title: "Operasyon Paneli",
-    desc: "Yatırım takibi, POS sağlayıcı yönetimi, komisyon ve raporlama — tek yönetim panelinde.",
+    icon: "chart" as const,
+    title: "Tüm ödemeler tek panelde",
+    desc: "Günlük hacim, durum ve raporları tek ekrandan takip edin. Sade, hızlı operasyon.",
   },
+];
+
+const STEPS = [
+  { num: "01", title: "Link oluşturun", desc: "Tutar ve müşteri bilgisiyle saniyeler içinde ödeme linki üretin." },
+  { num: "02", title: "Müşteri öder", desc: "Kart sahibi 3D Secure ile doğrulama yapar; işlem şifreli bağlantı üzerinden tamamlanır." },
+  { num: "03", title: "Sonucu alın", desc: "Onay veya red anında panelinize düşer; ekstra manuel kontrol gerekmez." },
 ];
 
 export default function LandingPage() {
@@ -31,58 +40,102 @@ export default function LandingPage() {
           <div className="landing-logo">OP</div>
           <span className="landing-name">OnePOS</span>
         </div>
-        <Link href="/login" className="btn btn-primary landing-login">
-          Panel Girişi
-        </Link>
       </header>
 
       <main className="landing-main">
         <section className="landing-hero">
-          <p className="landing-tag">Güvenli Ödeme Altyapısı</p>
-          <h1 className="landing-title">
-            Kredi kartı POS altyapısı — güvenli, hızlı, entegre.
-          </h1>
-          <p className="landing-desc">
-            OnePOS, kredi kartı yatırımları için uçtan uca ödeme altyapısı sunar. 3D Secure doğrulama,
-            256-bit SSL şifreleme ve PSP webhook entegrasyonu ile işlemler otomatik onaylanır.
-          </p>
+          <div className="landing-hero-copy">
+            <p className="landing-tag">Güvenli kart tahsilatı</p>
+            <h1 className="landing-title">
+              Kredi kartı ile
+              <span className="landing-title-accent"> güvenle ödeme alın.</span>
+            </h1>
+            <p className="landing-desc">
+              OnePOS, işletmeniz için hazır ödeme altyapısı sunar. Müşteriniz kartını girer,
+              banka 3D Secure ile onaylar; siz sonucu anında görürsünüz. Şifreleme ve güvenlik
+              standartları dahili — ek kurulum gerektirmez.
+            </p>
 
-          <div className="landing-trust">
-            {TRUST_ITEMS.map((item) => (
-              <div key={item.label} className="landing-trust-item">
-                <span className="landing-trust-icon">
-                  <Icon name={item.icon} size={18} />
-                </span>
-                <div>
-                  <div className="landing-trust-label">{item.label}</div>
-                  <div className="landing-trust-desc">{item.desc}</div>
-                </div>
+            <div className="landing-actions">
+              <Link href="/login" className="btn btn-primary landing-btn-primary">
+                Ödeme Almaya Başlayın
+              </Link>
+            </div>
+
+            <div className="landing-pills">
+              <span className="landing-pill">
+                <Icon name="lock" size={14} /> SSL şifreleme
+              </span>
+              <span className="landing-pill">
+                <Icon name="shield" size={14} /> 3D Secure
+              </span>
+              <span className="landing-pill">
+                <Icon name="card" size={14} /> Kart ödemesi
+              </span>
+            </div>
+          </div>
+
+          <div className="landing-hero-visual" aria-hidden>
+            <div className="landing-mock-card">
+              <div className="landing-mock-chip" />
+              <div className="landing-mock-lines">
+                <span />
+                <span />
               </div>
-            ))}
+              <div className="landing-mock-footer">
+                <span>•••• 4242</span>
+                <span>12/28</span>
+              </div>
+            </div>
+            <div className="landing-mock-badge">
+              <Icon name="shield" size={16} />
+              Güvenli ödeme
+            </div>
           </div>
+        </section>
 
-          <div className="landing-actions">
-            <Link href="/login" className="btn btn-primary">
-              Yönetim Paneli
-            </Link>
-            <Link href="/docs" className="btn btn-ghost">
-              Entegrasyon Dokümantasyonu
-            </Link>
-          </div>
+        <section className="landing-trust" aria-label="Güvenlik özellikleri">
+          {TRUST_ITEMS.map((item) => (
+            <div key={item.label} className="landing-trust-item">
+              <span className="landing-trust-icon">
+                <Icon name={item.icon} size={18} />
+              </span>
+              <div>
+                <div className="landing-trust-label">{item.label}</div>
+                <div className="landing-trust-desc">{item.desc}</div>
+              </div>
+            </div>
+          ))}
         </section>
 
         <section className="landing-features">
           {FEATURES.map((f) => (
             <article key={f.title} className="landing-feature">
+              <span className="landing-feature-icon">
+                <Icon name={f.icon} size={20} />
+              </span>
               <h3>{f.title}</h3>
               <p>{f.desc}</p>
             </article>
           ))}
         </section>
+
+        <section className="landing-steps">
+          <h2 className="landing-steps-title">Nasıl çalışır?</h2>
+          <div className="landing-steps-grid">
+            {STEPS.map((step) => (
+              <article key={step.num} className="landing-step">
+                <span className="landing-step-num">{step.num}</span>
+                <h3>{step.title}</h3>
+                <p>{step.desc}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       </main>
 
       <footer className="landing-footer">
-        <span>OnePOS — Güvenli Ödeme Altyapısı</span>
+        <span className="landing-footer-brand">OnePOS</span>
         <div className="landing-footer-badges">
           <span className="landing-footer-badge">
             <Icon name="lock" size={12} /> 256-bit SSL
@@ -90,10 +143,11 @@ export default function LandingPage() {
           <span className="landing-footer-badge">
             <Icon name="shield" size={12} /> 3D Secure
           </span>
+          <span className="landing-footer-badge">
+            <Icon name="card" size={12} /> Kart ödemesi
+          </span>
         </div>
-        <Link href="/docs" className="landing-footer-link">
-          API Dokümantasyonu
-        </Link>
+        <span className="landing-footer-copy">Güvenli ödeme altyapısı</span>
       </footer>
     </div>
   );

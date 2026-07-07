@@ -33,12 +33,16 @@ Use `pnpm dev:clean` if the web app shows stale chunk / Internal Server Error (c
 
 ## Panel Routes (admin)
 
+Panel runs on `APP_BASE_URL` (production: `https://app.onekart.info`) without a `/panel` prefix.
+
 | Route | Purpose |
 |-------|---------|
-| `/panel/pos` | POS provider settings (active/default, min/max) |
-| `/panel/sites` | Site management + `dep_commission_rate` |
-| `/panel/site-reconciliation` | Per-site gross/commission/net report |
-| `/panel/settings` | General settings (chat toggle) |
+| `/pos` | POS provider settings (active/default, min/max) |
+| `/sites` | Site management + `dep_commission_rate` |
+| `/site-reconciliation` | Per-site gross/commission/net report |
+| `/settings` | Account settings |
+
+Landing and API docs: `APP_MARKETING_URL` (e.g. `https://onekart.info`, `/docs`).
 
 ## Payment Flow
 
@@ -73,13 +77,13 @@ BC Wallet API (`/bc/balance`, `/bc/credit`, `/bc/debit`) uses `X-Signature` HMAC
 | stripe | Production (Payment Element) | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` |
 | sumup | Production | `SUMUP_API_KEY`, `SUMUP_MERCHANT_CODE` |
 
-Configure active providers, min/max amounts, and default method in **Admin → POS Ayarları** (`/panel/pos`). Credentials live in `.env`.
+Configure active providers, min/max amounts, and default method in **Admin → POS Ayarları** (`/pos`). Credentials live in `.env`.
 
 ## Commission Model
 
-- Each site has `dep_commission_rate` (%), set in `/panel/sites`
+- Each site has `dep_commission_rate` (%), set in `/sites`
 - On deposit approval, `commissionRate` and `commissionAmount` are snapshotted on the deposit record
-- Site reconciliation report: `/panel/site-reconciliation`
+- Site reconciliation report: `/site-reconciliation`
 
 ## Docker (local dev)
 

@@ -18,11 +18,13 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 3. Create **PostgreSQL** and **Redis** as separate Coolify resources; copy their internal URLs into `DATABASE_URL` and `REDIS_URL`.
 4. `DATABASE_URL` / `REDIS_URL` must use **Coolify internal hostnames** (from each resource’s connection string — not `@postgres:5432`).
 5. The compose file attaches `api` to the external `coolify` Docker network so it can reach managed Postgres/Redis.
-6. Map domains in Coolify **Domains** tab:
-   - **web** → panel domain (e.g. `https://onekart.info`)
-   - **api** → webhook domain (e.g. `https://api.onekart.info`)
+6. Map domains in Coolify **Domains** tab (all → web service port 3105):
+   - **Marketing** → `https://onekart.info` — landing + `/docs` (`APP_MARKETING_URL`)
+   - **Panel** → `https://app.onekart.info` — admin UI, no `/panel` prefix (`APP_BASE_URL`)
+   - **Payment** → `https://odeme.click` — customer `/pay/*` (`APP_PAYMENT_URL`)
+   - **api** → `https://api.onekart.info` (`API_PUBLIC_URL`)
 7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
-   - `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
+   - `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
 8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
 9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
@@ -34,10 +36,11 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 | Variable | Description |
 |----------|-------------|
 | `APP_SECRET` | JWT/session signing secret |
-| `APP_BASE_URL` | Panel URL (admin `/panel/*`) — **required** |
+| `APP_MARKETING_URL` | Landing + docs (e.g. `https://onekart.info`) — **required** when split from panel |
+| `APP_BASE_URL` | Panel app subdomain (e.g. `https://app.onekart.info`, paths like `/dashboard`) — **required** |
 | `APP_PAYMENT_URL` | Payment URL (customer `/pay/*` links) — **required** |
 | `API_PUBLIC_URL` | PSP webhook base URL — **required** |
-| `CORS_ORIGIN` | Optional comma-separated origins; defaults to panel + payment URLs |
+| `CORS_ORIGIN` | Optional comma-separated origins; defaults to marketing + panel + payment URLs |
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/onepara_card` — use Coolify Postgres internal hostname |
 | `REDIS_URL` | Redis connection string — use Coolify Redis internal URL |
 

@@ -158,5 +158,3 @@ textarea.form-input {
 .input-affix .form-input { flex: 1; }
 
 .input-affix-slot { color: var(--muted); flex-shrink: 0; }
-
-.chat-compose-input { flex: 1; }

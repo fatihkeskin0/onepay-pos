@@ -27,6 +27,6 @@ export function useClientSession() {
     role: session?.role ?? null,
     username: session?.username ?? "",
     isAdmin: session?.role === "admin",
-    isKasiyer: session?.role === "kasiyer" || session?.role === "sub_kasiyer",
+    isKasiyer: session?.role === "kasiyer",
   };
 }

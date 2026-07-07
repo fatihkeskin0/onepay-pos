@@ -1,22 +1,9 @@
-export type PanelRole = "admin" | "kasiyer" | "sub_kasiyer" | "wd_manager";
-
-export type SubPermission =
-  | "deps_view"
-  | "deps_action"
-  | "wds_view"
-  | "wds_action"
-  | "iban_view"
-  | "iban_toggle"
-  | "iban_manage"
-  | "kasa_view"
-  | "teslim";
+export type PanelRole = "admin" | "kasiyer" | "wd_manager";
 
 export interface TokenPayload {
   id: number;
   role: PanelRole;
   site_id?: number;
-  sub_id?: number;
-  sub_username?: string;
   tv?: number;
   exp: number;
 }
@@ -41,17 +28,14 @@ export interface NavItem {
   label: string;
   icon?: string;
   badge?: string;
-  perm?: SubPermission;
-  hiddenForSub?: boolean;
   devOnly?: boolean;
 }
 
 export const KASIYER_NAV: NavItem[] = [
   { section: "GENEL", id: "kas-dashboard", label: "Dashboard", icon: "📊" },
-  { section: "GENEL", id: "kas-dep", label: "Yatırımlar", icon: "💳", badge: "nav-badge-dep", perm: "deps_view" },
+  { section: "GENEL", id: "kas-dep", label: "Yatırımlar", icon: "💳", badge: "nav-badge-dep" },
   { section: "GENEL", id: "kas-export", label: "Tüm İşlemler", icon: "📋" },
   { section: "AYARLAR", id: "kas-sifre", label: "Hesap Ayarları", icon: "⚙️" },
-  { section: "AYARLAR", id: "kas-personel", label: "Personel", icon: "👥", hiddenForSub: true },
   { section: "SİSTEM", id: "kas-duyurular", label: "Duyurular", icon: "📢" },
 ];
 
@@ -61,13 +45,12 @@ export const ADMIN_NAV: NavItem[] = [
   { section: "Yönetim", id: "adm-uyeler", label: "Kullanıcılar", icon: "👤" },
   { section: "Yönetim", id: "adm-kasiyerler", label: "Tüm Agentler", icon: "🧑‍💼" },
   { section: "Yönetim", id: "adm-monitor", label: "Canlı İzleme", icon: "📡", badge: "nav-badge-online-kas" },
-  { section: "Yönetim", id: "adm-personel", label: "Alt Kullanıcılar", icon: "👥" },
   { section: "İşlemler", id: "adm-dep", label: "Yatırımlar", icon: "💳", badge: "nav-badge-adm-dep" },
   { section: "İşlemler", id: "adm-export", label: "Tüm İşlemler", icon: "📋" },
   { section: "Finans", id: "adm-pos", label: "POS Ayarları", icon: "🏦" },
   { section: "Finans", id: "adm-site-mutabakat", label: "Site Mutabakatı", icon: "🧾" },
   { section: "Finans", id: "adm-reconciliation", label: "PSP Mutabakatı", icon: "🔄" },
-  { section: "Finans", id: "adm-giris", label: "Giriş Kayıtları", icon: "🔐" },
+  { section: "Finans", id: "adm-giris", label: "Loglar", icon: "📋" },
   { section: "Finans", id: "adm-raporlar", label: "Raporlar", icon: "📈" },
   { section: "Güvenlik", id: "adm-supheliler", label: "Şüpheli İşlemler", icon: "⚠️", badge: "nav-badge-supheli" },
   { section: "Sistem", id: "adm-duyurular", label: "Duyurular", icon: "📢" },
@@ -83,7 +66,6 @@ export const SLUG_TO_PAGE: Record<string, string> = {
   "deposit/approved": "deposit",
   "deposit/rejected": "deposit",
   transactions: "transactions",
-  personel: "personel",
   duyurular: "duyurular",
   settings: "settings",
   sites: "adm-siteler",
@@ -104,8 +86,6 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-dep": "deposit",
   "kas-export": "transactions",
   "adm-export": "transactions",
-  "kas-personel": "personel",
-  "adm-personel": "personel",
   "kas-duyurular": "duyurular",
   "adm-duyurular": "duyurular",
   "kas-sifre": "settings",
@@ -119,7 +99,7 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-reconciliation": "reconciliation",
   "adm-raporlar": "reports",
   "adm-supheliler": "suspicious",
-  "adm-giris": "login-logs",
+  "adm-giris": "logs",
   "adm-demo": "demo",
 };
 
@@ -131,7 +111,6 @@ export const LS_KEYS = {
   logId: "rf_log_id",
   theme: "rf_theme",
   seenAnn: "rf_seen_ann",
-  subPerms: "rf_sub_perms",
   sound: "rf_sound",
 } as const;
 

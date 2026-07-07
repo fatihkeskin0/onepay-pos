@@ -7,12 +7,6 @@ export interface DocsTocItem {
   label: string;
 }
 
-export interface DocsEndpointRow {
-  method: "POST" | "GET";
-  endpoint: string;
-  description: string;
-}
-
 export interface DocsParamRow {
   name: string;
   type: string;
@@ -26,11 +20,23 @@ export interface DocsStatusPill {
   tone: "warn" | "ok" | "bad" | "info";
 }
 
+export interface DocsMetaItem {
+  label: string;
+  value: string;
+}
+
+export interface DocsErrorRow {
+  code: string;
+  description: string;
+}
+
 export interface DocsEndpointDoc {
   id: string;
+  title: string;
   method: "POST" | "GET";
   path: string;
   description: string;
+  meta: DocsMetaItem[];
   paramTitle: string;
   params: DocsParamRow[];
   requestLabel: string;
@@ -39,6 +45,8 @@ export interface DocsEndpointDoc {
   responseSample: string;
   statusPills?: DocsStatusPill[];
   notes?: string[];
+  errorTitle: string;
+  errors: DocsErrorRow[];
 }
 
 export interface DocsCallbackRow {
@@ -48,7 +56,7 @@ export interface DocsCallbackRow {
 }
 
 export interface DocsContent {
-  nav: { home: string; panel: string };
+  nav: { home: string };
   tocTitle: string;
   toc: DocsTocItem[];
   hero: {
@@ -61,22 +69,11 @@ export interface DocsContent {
     baseUrlValue: string;
     baseUrlNote: string;
   };
-  endpointSummary: {
-    title: string;
-    headers: [string, string, string];
-    rows: DocsEndpointRow[];
-  };
   endpointsSectionTitle: string;
   endpoints: DocsEndpointDoc[];
-  flow: {
-    title: string;
-    steps: string[];
-  };
   webhook: {
     title: string;
     intro: string;
-    flowTitle: string;
-    flowSteps: string[];
     payloadTitle: string;
     responseTitle: string;
     checksumTitle: string;
@@ -86,11 +83,5 @@ export interface DocsContent {
     rows: DocsCallbackRow[];
     setupTitle: string;
     setupItems: string[];
-  };
-  errors: {
-    title: string;
-    intro: string;
-    tableHeaders: [string, string, string];
-    rows: { cells: [string, string, string] }[];
   };
 }

@@ -8,7 +8,6 @@ import { Modal } from "@/components/Modal";
 import { useClientSession } from "@/hooks/useClientSession";
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Record<string, string>>({});
   const { notify } = useToast();
   const { ready, isAdmin } = useClientSession();
 
@@ -24,26 +23,11 @@ export default function SettingsPage() {
   const [disablePassword, setDisablePassword] = useState("");
 
   useEffect(() => {
-    if (!ready) return;
-    if (isAdmin) {
-      API.get<{ settings: Record<string, string> }>("/admin/settings")
-        .then((d) => setSettings(d.settings))
-        .catch(() => undefined);
-    } else {
-      API.get<{ enabled: boolean }>("/cashier/get_2fa_status")
-        .then((d) => setTwoFaEnabled(d.enabled))
-        .catch(() => undefined);
-    }
+    if (!ready || isAdmin) return;
+    API.get<{ enabled: boolean }>("/cashier/get_2fa_status")
+      .then((d) => setTwoFaEnabled(d.enabled))
+      .catch(() => undefined);
   }, [isAdmin, ready]);
-
-  const saveAdmin = async () => {
-    try {
-      await API.post("/admin/update_settings", settings);
-      notify("Kaydedildi", "success");
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
-  };
 
   const changePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -107,33 +91,15 @@ export default function SettingsPage() {
         </div>
       </div>
       {!ready ? null : isAdmin ? (
-        <>
-          <div className="card mb-4">
-            <h3 className="card-title-sm">POS Sağlayıcıları</h3>
-            <p className="settings-note">
-              Aktif yöntemler, min/max tutarlar ve varsayılan sağlayıcı POS Ayarları sayfasından yönetilir.
-            </p>
-            <Link href="/panel/pos" className="btn btn-ghost">
-              POS Ayarları →
-            </Link>
-          </div>
-          <div className="card">
-            <div className="form-group">
-              <label className="form-label">Chat Aktif</label>
-              <select
-                className="form-input"
-                value={settings.chat_enabled ?? "1"}
-                onChange={(e) => setSettings({ ...settings, chat_enabled: e.target.value })}
-              >
-                <option value="1">Evet</option>
-                <option value="0">Hayır</option>
-              </select>
-            </div>
-            <button type="button" className="btn btn-primary" onClick={saveAdmin}>
-              Kaydet
-            </button>
-          </div>
-        </>
+        <div className="card mb-4">
+          <h3 className="card-title-sm">POS Sağlayıcıları</h3>
+          <p className="settings-note">
+            Aktif yöntemler, min/max tutarlar ve varsayılan sağlayıcı POS Ayarları sayfasından yönetilir.
+          </p>
+          <Link href="/pos" className="btn btn-ghost">
+            POS Ayarları →
+          </Link>
+        </div>
       ) : (
         <>
           <div className="card mb-4">

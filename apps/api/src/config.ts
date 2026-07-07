@@ -48,7 +48,11 @@ function resolveCorsOrigins(): string | string[] {
     return parts;
   }
 
-  const origins = [...new Set([panelUrl, paymentUrl].filter(Boolean))];
+  const marketingUrl =
+    envFirst("APP_MARKETING_URL") ??
+    coolifyServiceUrl("SERVICE_URL_MARKETING", "SERVICE_FQDN_MARKETING");
+
+  const origins = [...new Set([panelUrl, paymentUrl, marketingUrl].filter((x): x is string => Boolean(x)))];
   if (origins.length <= 1) return origins[0] ?? panelUrl;
   return origins;
 }
