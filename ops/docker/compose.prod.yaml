@@ -1,5 +1,5 @@
-# Production stack for Coolify / Docker Compose
-# Set env vars in Coolify UI or via .env.production (never commit secrets)
+# Production stack — prefer repo-root /docker-compose.yaml for Coolify (build context ".").
+# Local: docker compose -f ops/docker/compose.prod.yaml up (from repo root).
 
 services:
   postgres:
@@ -33,7 +33,7 @@ services:
 
   api:
     build:
-      context: ../..
+      context: .
       dockerfile: ops/docker/Dockerfile.api
     restart: unless-stopped
     environment:
@@ -75,7 +75,7 @@ services:
 
   web:
     build:
-      context: ../..
+      context: .
       dockerfile: ops/docker/Dockerfile.web
       args:
         NEXT_PUBLIC_API_URL: http://api:4105

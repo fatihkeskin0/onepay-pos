@@ -16,7 +16,7 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 ## Quick setup
 
 1. Create a new **Docker Compose** project in Coolify.
-2. Point to this repo; compose file: `docker-compose.yaml` (default) or `ops/docker/compose.prod.yaml`.
+2. Point to this repo; **Docker Compose Location: `/docker-compose.yaml`** (repo root — not `ops/docker/compose.prod.yaml`).
 3. Copy `.env.production.example` → Coolify **Environment Variables**.
 4. Map domains in Coolify **Domains** tab:
    - **web** → panel domain (e.g. `https://onekart.info`)
