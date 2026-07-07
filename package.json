@@ -12,7 +12,7 @@
     "db:push": "pnpm --filter @onepara/db push",
     "db:seed": "pnpm --filter @onepara/db seed",
     "db:seed:prod": "pnpm --filter @onepara/db seed:prod",
-    "db:deploy": "pnpm --filter @onepara/db deploy"
+    "db:deploy": "pnpm --filter @onepara/db run deploy"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

@@ -97,9 +97,13 @@ function startApi() {
 }
 
 async function ensureApi() {
-  if (await isApiUp()) {
-    console.log(`[web-dev] API already running on :${API_PORT}`);
-    return;
+  // Turbo starts API and web in parallel — wait before spawning a duplicate API.
+  for (let i = 0; i < 30; i += 1) {
+    if (await isApiUp()) {
+      console.log(`[web-dev] API already running on :${API_PORT}`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   console.log("[web-dev] API not running — building @onepara/db and starting API...");

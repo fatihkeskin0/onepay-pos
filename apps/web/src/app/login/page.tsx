@@ -119,38 +119,32 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="login-brand">
-        <div className="login-brand-glow" aria-hidden />
-        <div className="login-brand-content">
-          <div className="login-logo">OP</div>
-          <h1 className="login-brand-title">OnePOS</h1>
-          <p className="login-brand-sub">Güvenli ödeme yönetim paneli</p>
-          <ul className="login-trust">
-            {TRUST.map((item) => (
-              <li key={item.label}>
-                <Icon name={item.icon} size={16} />
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="login-bg" aria-hidden>
+        <div className="login-bg-glow login-bg-glow--a" />
+        <div className="login-bg-glow login-bg-glow--b" />
       </div>
 
-      <div className="login-panel">
-        <div className="login-card">
-          <div className="login-steps" aria-hidden>
-            <span className={`login-step ${step === "password" ? "login-step--active" : "login-step--done"}`} />
-            <span className={`login-step ${step === "2fa" ? "login-step--active" : ""}`} />
+      <main className="login-shell">
+        <header className="login-head">
+          <div className="login-mark">OP</div>
+          <div>
+            <p className="login-head-title">OnePOS</p>
+            <p className="login-head-sub">Ödeme yönetim paneli</p>
           </div>
+        </header>
 
-          <div className="login-card-header">
-            <p className="login-card-kicker">OnePOS Panel</p>
-            <h2 className="login-panel-title">
-              {step === "password" ? "Hesabınıza giriş yapın" : "İki adımlı doğrulama"}
-            </h2>
-            <p className="login-panel-hint">
+        <section className="login-card" aria-labelledby="login-heading">
+          <div className="login-card-top">
+            <div className="login-step-dots" aria-hidden>
+              <span className={step === "password" ? "is-active" : "is-done"} />
+              <span className={step === "2fa" ? "is-active" : ""} />
+            </div>
+            <h1 id="login-heading" className="login-title">
+              {step === "password" ? "Giriş yap" : "Doğrulama kodu"}
+            </h1>
+            <p className="login-lead">
               {step === "password"
-                ? "Yönetim paneline erişmek için kullanıcı bilgilerinizi girin."
+                ? "Panel erişimi için hesap bilgilerinizi girin."
                 : "Authenticator uygulamanızdaki 6 haneli kodu girin."}
             </p>
           </div>
@@ -183,13 +177,13 @@ export default function LoginPage() {
                 disabled={loading}
               />
               <Button type="submit" variant="primary" loading={loading} className="login-submit">
-                Giriş yap
+                Devam et
               </Button>
             </form>
           ) : (
             <form onSubmit={handle2fa} className="login-form" noValidate>
               <AuthField
-                label="Doğrulama kodu"
+                label="6 haneli kod"
                 fieldType="otp"
                 name="code"
                 value={code}
@@ -197,24 +191,28 @@ export default function LoginPage() {
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                hint="Google Authenticator veya benzeri uygulamadan alın."
                 required
                 disabled={loading}
               />
               <Button type="submit" variant="primary" loading={loading} className="login-submit">
-                Doğrula ve devam et
+                Doğrula
               </Button>
-              <Button type="button" variant="ghost" className="login-back" onClick={backToPassword} disabled={loading}>
-                Farklı hesapla giriş yap
-              </Button>
+              <button type="button" className="login-link-btn" onClick={backToPassword} disabled={loading}>
+                ← Farklı hesap
+              </button>
             </form>
           )}
+        </section>
 
-          <p className="login-footer-note">
-            Bu alan yalnızca yetkili kullanıcılar içindir. Tüm giriş denemeleri kayıt altına alınır.
-          </p>
-        </div>
-      </div>
+        <ul className="login-trust">
+          {TRUST.map((item) => (
+            <li key={item.label}>
+              <Icon name={item.icon} size={14} />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      </main>
     </div>
   );
 }
