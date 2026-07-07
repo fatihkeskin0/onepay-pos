@@ -71,6 +71,7 @@ model Site {
   callbackUrlWithdrawal String?           @map("callback_url_withdrawal") @db.VarChar(512)
   brandColor            String            @default("#2563EB") @map("brand_color") @db.VarChar(7)
   brandBgColor          String            @default("#F4F7FC") @map("brand_bg_color") @db.VarChar(7)
+  brandTheme            String            @default("light") @map("brand_theme") @db.VarChar(5)
   brandLogoUrl          String?           @map("brand_logo_url") @db.VarChar(255)
   telegramChatId        String?           @map("telegram_chat_id") @db.VarChar(50)
   createdAt             DateTime          @default(now()) @map("created_at")

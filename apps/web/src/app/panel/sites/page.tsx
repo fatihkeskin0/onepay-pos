@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
+import { SiteLogoUpload, uploadPendingSiteLogo } from "@/components/admin/SiteLogoUpload";
 
 interface Site {
   id: number;
@@ -14,6 +15,7 @@ interface Site {
   isActive: boolean;
   brandColor: string;
   brandBgColor: string;
+  brandTheme: string;
   brandLogoUrl: string | null;
   callbackUrlDeposit: string | null;
 }
@@ -24,6 +26,7 @@ interface SiteForm {
   dep_commission_rate: string;
   brand_color: string;
   brand_bg_color: string;
+  brand_theme: "light" | "dark";
   brand_logo_url: string;
   callback_url_deposit: string;
 }
@@ -34,6 +37,7 @@ const emptyForm = (): SiteForm => ({
   dep_commission_rate: "0",
   brand_color: "#2563EB",
   brand_bg_color: "#F4F7FC",
+  brand_theme: "light",
   brand_logo_url: "",
   callback_url_deposit: "",
 });
@@ -48,6 +52,7 @@ export default function SitesPage() {
 
   const [editTarget, setEditTarget] = useState<Site | null>(null);
   const [editForm, setEditForm] = useState<SiteForm>(emptyForm());
+  const [addLogoFile, setAddLogoFile] = useState<File | null>(null);
 
   const load = async () => {
     try {
@@ -64,18 +69,23 @@ export default function SitesPage() {
 
   const submitAdd = async () => {
     try {
-      await API.post("/admin/add_site", {
+      const data = await API.post<{ site: { id: number } }>("/admin/add_site", {
         name: addForm.name,
         min_deposit: Number(addForm.min_deposit),
         dep_commission_rate: Number(addForm.dep_commission_rate),
         brand_color: addForm.brand_color,
         brand_bg_color: addForm.brand_bg_color,
-        brand_logo_url: addForm.brand_logo_url || null,
+        brand_theme: addForm.brand_theme,
+        brand_logo_url: addLogoFile ? null : addForm.brand_logo_url || null,
         callback_url_deposit: addForm.callback_url_deposit || null,
       });
+      if (addLogoFile) {
+        await uploadPendingSiteLogo(data.site.id, addLogoFile);
+      }
       notify("Site eklendi", "success");
       setAddOpen(false);
       setAddForm(emptyForm());
+      setAddLogoFile(null);
       load();
     } catch (e) {
       notify(e instanceof Error ? e.message : "Hata", "error");
@@ -90,6 +100,7 @@ export default function SitesPage() {
       dep_commission_rate: String(s.depCommissionRate),
       brand_color: s.brandColor,
       brand_bg_color: s.brandBgColor,
+      brand_theme: s.brandTheme === "dark" ? "dark" : "light",
       brand_logo_url: s.brandLogoUrl ?? "",
       callback_url_deposit: s.callbackUrlDeposit ?? "",
     });
@@ -105,6 +116,7 @@ export default function SitesPage() {
         dep_commission_rate: Number(editForm.dep_commission_rate),
         brand_color: editForm.brand_color,
         brand_bg_color: editForm.brand_bg_color,
+        brand_theme: editForm.brand_theme,
         brand_logo_url: editForm.brand_logo_url || null,
         callback_url_deposit: editForm.callback_url_deposit || null,
       });
@@ -135,7 +147,11 @@ export default function SitesPage() {
     }
   };
 
-  const renderSiteForm = (form: SiteForm, setForm: (f: SiteForm) => void) => (
+  const renderSiteForm = (
+    form: SiteForm,
+    setForm: (f: SiteForm) => void,
+    options?: { siteId?: number; onPendingFile?: (file: File | null) => void },
+  ) => (
     <>
       <div className="form-group">
         <label className="form-label">Site Adı</label>
@@ -183,13 +199,24 @@ export default function SitesPage() {
         </div>
       </div>
       <div className="form-group">
-        <label className="form-label">Logo URL</label>
-        <input
+        <label className="form-label">Ödeme Sayfası Teması</label>
+        <select
           className="form-input"
-          value={form.brand_logo_url}
-          onChange={(e) => setForm({ ...form, brand_logo_url: e.target.value })}
-        />
+          value={form.brand_theme}
+          onChange={(e) =>
+            setForm({ ...form, brand_theme: e.target.value === "dark" ? "dark" : "light" })
+          }
+        >
+          <option value="light">Açık</option>
+          <option value="dark">Koyu</option>
+        </select>
       </div>
+      <SiteLogoUpload
+        siteId={options?.siteId}
+        value={form.brand_logo_url}
+        onChange={(url) => setForm({ ...form, brand_logo_url: url })}
+        onPendingFile={options?.onPendingFile}
+      />
       <div className="form-group">
         <label className="form-label">Yatırım Callback URL</label>
         <input
@@ -274,7 +301,7 @@ export default function SitesPage() {
           </>
         }
       >
-        {renderSiteForm(addForm, setAddForm)}
+        {renderSiteForm(addForm, setAddForm, { onPendingFile: setAddLogoFile })}
       </Modal>
 
       <Modal
@@ -293,7 +320,9 @@ export default function SitesPage() {
           </>
         }
       >
-        {renderSiteForm(editForm, setEditForm)}
+        {editTarget
+          ? renderSiteForm(editForm, setEditForm, { siteId: editTarget.id })
+          : null}
       </Modal>
     </>
   );

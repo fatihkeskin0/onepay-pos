@@ -1,7 +1,5 @@
 import type { DocsContent } from "../types";
 import {
-  SAMPLE_CANCEL_DEPOSIT_REQ,
-  SAMPLE_CANCEL_DEPOSIT_RES,
   SAMPLE_CHECKSUM,
   SAMPLE_CREATE_PAYMENT_LINK_REQ,
   SAMPLE_CREATE_PAYMENT_LINK_RES,
@@ -10,13 +8,11 @@ import {
 } from "../shared-samples";
 
 export const trContent: DocsContent = {
-  nav: { home: "Ana Sayfa" },
   tocTitle: "İçindekiler",
   toc: [
     { id: "overview", label: "Genel Bakış" },
     { id: "create-payment-link", label: "Ödeme Linki Oluştur" },
     { id: "deposit-status", label: "Yatırım Durumu" },
-    { id: "cancel-deposit", label: "Yatırım İptal" },
     { id: "webhook", label: "Yatırım Callback" },
   ],
   hero: {
@@ -27,8 +23,8 @@ export const trContent: DocsContent = {
     securityBody:
       "create_payment_link için X-Api-Key header zorunludur. Yalnızca kendi backend'inizden gönderin; anahtarı tarayıcı kodunda asla açığa çıkarmayın.",
     baseUrlTitle: "Base URL",
-    baseUrlValue: "https://api.onekart.info/user/",
-    baseUrlNote: "Aşağıdaki tüm endpoint'ler bu base altında çağrılır. Parametre adları büyük/küçük harfe duyarlıdır.",
+    baseUrlValue: "/backend/user/",
+    baseUrlNote: "Aşağıdaki yolların başına kendi site adresinizi ekleyin (örn. https://siteniz.com/backend/user/). Parametre adları büyük/küçük harfe duyarlıdır.",
   },
   endpointsSectionTitle: "API Uç Noktaları",
   endpoints: [
@@ -36,7 +32,7 @@ export const trContent: DocsContent = {
       id: "create-payment-link",
       title: "Ödeme Linki Oluştur",
       method: "POST",
-      path: "https://api.onekart.info/user/create_payment_link",
+      path: "/backend/user/create_payment_link",
       description:
         "Tek kullanımlık bir ödeme sayfası linki üretir. Yanıttaki url alanına müşterinizi yönlendirdiğinizde kredi kartı ödeme ekranı açılır.",
       meta: [
@@ -49,18 +45,21 @@ export const trContent: DocsContent = {
       paramTitle: "Parametreler",
       params: [
         { name: "X-Api-Key", type: "string (header)", required: "yes", description: "Site API anahtarınız. HTTP header olarak gönderilir." },
-        { name: "user_id", type: "string (maks. 64)", required: "yes", description: "Sisteminizdeki benzersiz müşteri ID. Callback'te UserCode olarak döner." },
+        { name: "user_id", type: "string (maks. 100)", required: "yes", description: "Sisteminizdeki benzersiz müşteri ID. Callback'te UserCode olarak döner." },
         { name: "amount", type: "float (maks. 18,2)", required: "yes", description: "Yatırım tutarı (TRY). Minimum, site ayarınıza göre belirlenir. Ondalık ayırıcı olarak nokta kullanın." },
-        { name: "return_url", type: "string (maks. 512)", required: "yes", description: "Ödeme sonrası müşterinin yönlendirileceği URL." },
-        { name: "transaction_id", type: "string (maks. 128)", required: "yes", description: "Kendi benzersiz işlem ID'niz. Callback'in CustomField alanında geri döner." },
-        { name: "name", type: "string (maks. 100)", required: "optional", description: "Müşteri ad soyad. Ödeme sayfasında gösterilir." },
+        { name: "return_url", type: "string (maks. 500)", required: "optional", description: "Ödeme sonrası müşterinin yönlendirileceği URL." },
+        { name: "transaction_id", type: "string (maks. 128)", required: "optional", description: "Kendi benzersiz işlem ID'niz. Callback'in CustomField alanında döner; gönderilmezse boş string." },
+        { name: "name", type: "string (maks. 100)", required: "optional", description: "Müşteri ad soyad. Ödeme sayfasında gösterilir. Alternatif alan adı: user_name." },
       ],
       requestLabel: "İstek Örneği (cURL)",
       requestSample: SAMPLE_CREATE_PAYMENT_LINK_REQ,
       responseLabel: "Başarılı Yanıt (200 OK)",
       responseSample: SAMPLE_CREATE_PAYMENT_LINK_RES,
       notes: [
+        "url, tam ödeme sayfası adresidir ({APP_PAYMENT_URL}/pay/{token}). Müşteriyi bu adrese yönlendirin.",
+        "token, ödeme oturum token'ıdır (32 hex karakter); deposit_status'ta kullanılan yatırım token'ı değildir.",
         "expires_at alanı UTC+3 (Europe/Istanbul) saat diliminde YYYY-MM-DD HH:mm:ss formatındadır.",
+        "Müşteri 15 dakika içinde ödemeyi tamamlamazsa bekleyen yatırım otomatik iptal edilir. Merchant tarafında iptal API'si yoktur — sonuç callback ile StatusCode 2 olarak gelir.",
       ],
       errorTitle: "Hata Yanıtları",
       errors: [
@@ -73,9 +72,9 @@ export const trContent: DocsContent = {
       id: "deposit-status",
       title: "Yatırım Durumu",
       method: "GET",
-      path: "https://api.onekart.info/user/deposit_status",
+      path: "/backend/user/deposit_status",
       description:
-        "Bir yatırımın anlık durumunu sorgular. Callback kullanamıyorsanız polling için kullanın; production'da callback önerilir.",
+        "Bir yatırımın anlık durumunu sorgular. ref ve token, müşteri ödeme sayfasında checkout başlattığında oluşan yatırım kimlik bilgileridir; create_payment_link yanıtında dönmez. Merchant backend için polling yerine callback kullanın.",
       meta: [
         { label: "Servis", value: "Kredi Kartı" },
         { label: "Metot", value: "GET" },
@@ -83,8 +82,8 @@ export const trContent: DocsContent = {
       ],
       paramTitle: "Query Parametreleri",
       params: [
-        { name: "ref", type: "string", required: "yes", description: "Yatırım referansı." },
-        { name: "token", type: "string", required: "yes", description: "Yatırım token'ı." },
+        { name: "ref", type: "string", required: "yes", description: "Yatırım referansı (checkout akışından; create_payment_link'ten gelmez)." },
+        { name: "token", type: "string", required: "yes", description: "ref ile eşleşen yatırım token'ı (checkout akışından)." },
       ],
       requestLabel: "İstek Örneği (cURL)",
       requestSample: SAMPLE_DEPOSIT_STATUS_REQ,
@@ -103,34 +102,6 @@ export const trContent: DocsContent = {
         { code: "429", description: "Çok fazla istek (rate limit)." },
       ],
     },
-    {
-      id: "cancel-deposit",
-      title: "Yatırım İptal",
-      method: "POST",
-      path: "https://api.onekart.info/user/cancel_deposit",
-      description:
-        "Bekleyen (pending) bir yatırımı iptal eder. Onaylanmış, reddedilmiş veya işleme alınmış yatırımlar iptal edilemez.",
-      meta: [
-        { label: "Servis", value: "Kredi Kartı" },
-        { label: "Metot", value: "POST" },
-        { label: "Yetki", value: "ref + token" },
-      ],
-      paramTitle: "Parametreler",
-      params: [
-        { name: "ref", type: "string", required: "yes", description: "Yatırım referansı." },
-        { name: "token", type: "string", required: "yes", description: "Yatırım token'ı." },
-      ],
-      requestLabel: "İstek Örneği (cURL)",
-      requestSample: SAMPLE_CANCEL_DEPOSIT_REQ,
-      responseLabel: "Başarılı Yanıt (200 OK)",
-      responseSample: SAMPLE_CANCEL_DEPOSIT_RES,
-      errorTitle: "Hata Yanıtları",
-      errors: [
-        { code: "404", description: "Kayıt bulunamadı." },
-        { code: "409", description: "İptal edilemez (onaylı/reddedilmiş/işlemde)." },
-        { code: "422", description: "ref ve token zorunludur." },
-      ],
-    },
   ],
   webhook: {
     title: "Yatırım Callback Bildirimi",
@@ -144,14 +115,14 @@ export const trContent: DocsContent = {
     tableHeaders: ["StatusCode", "Ne Zaman Tetiklenir", "Sizden Beklenen"],
     rows: [
       { statusCode: "1", when: "Yatırım onaylandığında", action: "Müşteri bakiyesine yansıtın." },
-      { statusCode: "2", when: "Yatırım reddedildiğinde", action: "Müşteriyi bilgilendirin; bakiye değişmez." },
-      { statusCode: "3", when: "Yatırım iptal edildiğinde", action: "Bekleyen kaydı kapatın; bakiye değişmez." },
+      { statusCode: "2", when: "Yatırım reddedildiğinde, iptal edildiğinde veya süresi dolduğunda", action: "Müşteriyi bilgilendirin; bakiye değişmez." },
     ],
     setupTitle: "Notlar",
     setupItems: [
       "Amount her zaman 2 ondalık basamakla formatlanır (örn. \"1500.00\").",
-      "TraderKey site API anahtarınızdır; CustomField gönderdiğiniz transaction_id değerini taşır.",
-      "Callback URL'iniz HTTP 200 dönmelidir. 2xx dışı yanıtta teslimat başarısız olarak loglanır.",
+      "TraderKey site API anahtarınızdır; CustomField gönderdiğiniz transaction_id değerini taşır (gönderilmezse boş string).",
+      "İptal ve süresi dolan yatırımlar da reddedilmiş gibi StatusCode 2 ile bildirilir.",
+      "Callback istekleri 10 saniye sonra zaman aşımına uğrar. 2xx dışı yanıtlar yalnızca sunucu konsoluna loglanır; yeniden denenmez.",
     ],
   },
 };

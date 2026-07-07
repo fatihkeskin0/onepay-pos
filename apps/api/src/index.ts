@@ -1,7 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
+import fastifyStatic from "@fastify/static";
 import fastifyRawBody from "fastify-raw-body";
+import { join } from "node:path";
 import { config } from "./config.js";
 import { error } from "./services/response.js";
 import { userRoutes } from "./routes/user.js";
@@ -88,6 +90,11 @@ await app.register(cors, {
 });
 
 await app.register(formbody);
+await app.register(fastifyStatic, {
+  root: join(config.upload.dir),
+  prefix: "/uploads/",
+  decorateReply: false,
+});
 await app.register(fastifyRawBody, {
   field: "rawBody",
   global: true,

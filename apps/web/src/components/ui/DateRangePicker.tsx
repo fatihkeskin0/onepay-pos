@@ -5,9 +5,7 @@ import { DayPicker, type DateRange } from "react-day-picker";
 import { tr } from "date-fns/locale";
 import { format, parseISO, startOfMonth, subDays } from "date-fns";
 import { Popover } from "./Popover";
-import { Button } from "./Button";
 import { Icon } from "./Icon";
-import { FormField } from "./FormField";
 
 interface DateRangePickerProps {
   from: string;
@@ -18,17 +16,23 @@ interface DateRangePickerProps {
   showPresets?: boolean;
 }
 
+const PRESETS = [
+  { key: "7d", label: "7G", days: 7 },
+  { key: "30d", label: "30G", days: 30 },
+  { key: "month", label: "Bu ay" },
+] as const;
+
 function toIsoDate(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
 function formatLabel(from: string, to: string) {
-  if (!from && !to) return "Tarih aralığı";
+  if (!from && !to) return "Tarih seç";
   if (from && to) {
     return `${format(parseISO(from), "d MMM", { locale: tr })} – ${format(parseISO(to), "d MMM yyyy", { locale: tr })}`;
   }
   if (from) return format(parseISO(from), "d MMM yyyy", { locale: tr });
-  return "";
+  return "Tarih seç";
 }
 
 export function DateRangePicker({
@@ -72,19 +76,15 @@ export function DateRangePicker({
   );
 
   return (
-    <div className="toolbar">
+    <div className="date-range-picker">
       {showPresets ? (
-        <div className="toolbar-presets">
-          {[
-            { key: "7d", label: "7 gün", days: 7 },
-            { key: "30d", label: "30 gün", days: 30 },
-            { key: "month", label: "Bu ay" },
-          ].map((p) => (
+        <div className="date-range-picker__presets" role="group" aria-label="Hızlı tarih seçimi">
+          {PRESETS.map((p) => (
             <button
               key={p.key}
               type="button"
-              className={`toolbar-preset ${activePreset === p.key ? "active" : ""}`}
-              onClick={() => applyPreset(p.key, p.days)}
+              className={`date-range-picker__preset${activePreset === p.key ? " is-active" : ""}`}
+              onClick={() => applyPreset(p.key, "days" in p ? p.days : undefined)}
             >
               {p.label}
             </button>
@@ -92,60 +92,65 @@ export function DateRangePicker({
         </div>
       ) : null}
 
-      <FormField label="Tarih aralığı" className="mb-0">
-        <Popover
-          open={open}
-          onOpenChange={setOpen}
-          className="calendar-popover"
-          trigger={
-            <button type="button" className={`date-input-trigger ${!from && !to ? "placeholder" : ""}`}>
-              <span>{formatLabel(from, to)}</span>
-              <Icon name="calendar" className="date-input-icon" size={16} />
-            </button>
-          }
-        >
-          <DayPicker
-            mode="range"
-            locale={tr}
-            selected={range}
-            onSelect={(r) => {
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        className="calendar-popover"
+        trigger={
+          <button
+            type="button"
+            className={`date-range-picker__trigger${!from && !to ? " is-placeholder" : ""}`}
+          >
+            <Icon name="calendar" className="date-range-picker__icon" size={15} />
+            <span className="date-range-picker__label">{formatLabel(from, to)}</span>
+          </button>
+        }
+      >
+        <DayPicker
+          mode="range"
+          locale={tr}
+          selected={range}
+          onSelect={(r) => {
+            setActivePreset(null);
+            onFromChange(r?.from ? toIsoDate(r.from) : "");
+            onToChange(r?.to ? toIsoDate(r.to) : "");
+            if (r?.from && r?.to) setOpen(false);
+          }}
+          numberOfMonths={1}
+        />
+        <div className="calendar-footer">
+          <button
+            type="button"
+            className="calendar-footer__btn"
+            onClick={() => {
+              const today = toIsoDate(new Date());
+              onFromChange(today);
+              onToChange(today);
               setActivePreset(null);
-              onFromChange(r?.from ? toIsoDate(r.from) : "");
-              onToChange(r?.to ? toIsoDate(r.to) : "");
+              setOpen(false);
             }}
-            numberOfMonths={1}
-          />
-          <div className="calendar-footer">
-            <Button
-              variant="link"
-              onClick={() => {
-                const today = toIsoDate(new Date());
-                onFromChange(today);
-                onToChange(today);
-                setOpen(false);
-              }}
-            >
-              Bugün
-            </Button>
-            <Button
-              variant="link"
-              onClick={() => {
-                onFromChange("");
-                onToChange("");
-                setActivePreset(null);
-                setOpen(false);
-              }}
-            >
-              Temizle
-            </Button>
-          </div>
-        </Popover>
-      </FormField>
+          >
+            Bugün
+          </button>
+          <button
+            type="button"
+            className="calendar-footer__btn"
+            onClick={() => {
+              onFromChange("");
+              onToChange("");
+              setActivePreset(null);
+              setOpen(false);
+            }}
+          >
+            Temizle
+          </button>
+        </div>
+      </Popover>
 
       {onApply ? (
-        <Button variant="primary" onClick={onApply}>
+        <button type="button" className="date-range-picker__apply btn btn-primary btn-sm" onClick={onApply}>
           Uygula
-        </Button>
+        </button>
       ) : null}
     </div>
   );

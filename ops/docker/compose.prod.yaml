@@ -32,6 +32,9 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       SUMUP_API_KEY: ${SUMUP_API_KEY:-}
       SUMUP_MERCHANT_CODE: ${SUMUP_MERCHANT_CODE:-}
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - uploads_data:/app/data/uploads
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4105/health"]
       interval: 15s
@@ -69,3 +72,6 @@ networks:
   coolify:
     external: true
     name: ${COOLIFY_NETWORK:-coolify}
+
+volumes:
+  uploads_data:

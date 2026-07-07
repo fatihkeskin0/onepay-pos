@@ -11,7 +11,6 @@ export const PANEL_PUBLIC_SEGMENTS = [
   "users",
   "cashiers",
   "monitor",
-  "reconciliation",
   "site-reconciliation",
   "logs",
   "login-logs",

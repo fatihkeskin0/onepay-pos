@@ -66,16 +66,6 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (!returnUrl) {
-      error(reply, "return_url gerekli", 400);
-      return;
-    }
-
-    if (!externalId) {
-      error(reply, "transaction_id gerekli", 400);
-      return;
-    }
-
     const token = randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + PAYMENT_LINK_TTL_MS);
 
@@ -131,6 +121,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         brand: {
           color: session.site.brandColor,
           bg: session.site.brandBgColor,
+          theme: session.site.brandTheme === "dark" ? "dark" : "light",
           logo: session.site.brandLogoUrl,
           name: session.site.name,
         },
@@ -403,6 +394,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         ? {
             color: deposit.site.brandColor,
             bg: deposit.site.brandBgColor,
+            theme: deposit.site.brandTheme === "dark" ? "dark" : "light",
             logo: deposit.site.brandLogoUrl,
             name: deposit.site.name,
           }

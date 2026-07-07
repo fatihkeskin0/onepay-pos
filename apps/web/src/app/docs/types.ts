@@ -56,7 +56,6 @@ export interface DocsCallbackRow {
 }
 
 export interface DocsContent {
-  nav: { home: string };
   tocTitle: string;
   toc: DocsTocItem[];
   hero: {

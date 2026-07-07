@@ -1,12 +1,12 @@
-export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location 'https://api.onekart.info/user/create_payment_link' \\
+export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location '/backend/user/create_payment_link' \\
 --header 'Content-Type: application/json' \\
 --header 'X-Api-Key: {site_api_key}' \\
 --data-raw '{
   "user_id": "customer_12345",
   "amount": 1500,
+  "name": "Ahmet Yilmaz",
   "return_url": "https://merchant.example.com/deposit/return",
-  "transaction_id": "ext-ref-001",
-  "name": "Ahmet Yilmaz"
+  "transaction_id": "ext-ref-001"
 }'`;
 
 export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
@@ -14,12 +14,12 @@ export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
   "message": "ok",
   "data": {
     "token": "a1b2c3d4e5f6789012345678abcdef01",
-    "url": "https://odeme.click/pay/a1b2c3d4e5f6789012345678abcdef01",
+    "url": "{payment_origin}/pay/a1b2c3d4e5f6789012345678abcdef01",
     "expires_at": "2026-07-05 18:45:00"
   }
 }`;
 
-export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location 'https://api.onekart.info/user/deposit_status?ref={reference}&token={deposit_token}'`;
+export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location '/backend/user/deposit_status?ref={reference}&token={deposit_token}'`;
 
 export const SAMPLE_DEPOSIT_STATUS_RES = `{
   "success": true,
@@ -31,19 +31,6 @@ export const SAMPLE_DEPOSIT_STATUS_RES = `{
     "reject_reason": null,
     "remaining_seconds": 0
   }
-}`;
-
-export const SAMPLE_CANCEL_DEPOSIT_REQ = `curl --location 'https://api.onekart.info/user/cancel_deposit' \\
---header 'Content-Type: application/json' \\
---data-raw '{
-  "ref": "20260705143052001",
-  "token": "{deposit_token}"
-}'`;
-
-export const SAMPLE_CANCEL_DEPOSIT_RES = `{
-  "success": true,
-  "message": "ok",
-  "data": { "cancelled": true }
 }`;
 
 export const SAMPLE_BC_CALLBACK = `POST {callback_url_deposit}

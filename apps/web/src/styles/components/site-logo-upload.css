@@ -1,0 +1,57 @@
+.site-logo-upload__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.site-logo-upload__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  max-width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+}
+
+.site-logo-upload__preview.has-image {
+  border-style: solid;
+  background: var(--surface);
+}
+
+.site-logo-upload__img {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: min(240px, 70vw);
+  object-fit: contain;
+  object-position: left center;
+}
+
+.site-logo-upload__placeholder {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.site-logo-upload__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 160px;
+}
+
+.site-logo-upload__input {
+  display: none;
+}
+
+.site-logo-upload__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.45;
+}

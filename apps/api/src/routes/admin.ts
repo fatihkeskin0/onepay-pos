@@ -7,11 +7,22 @@ import { config } from "../config.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback, invalidateSettingCache } from "../services/callback.js";
 import { invalidatePosMethodsCache, listPosMethodsWithMeta, activateSinglePosMethod, deactivatePosMethod } from "../services/pos-methods.js";
-import { isKnownProvider } from "../services/psp/index.js";
 import { formatBcExpiry } from "../services/format.js";
 import { getActivityLogs } from "../services/activity-log.js";
+import { buildSiteDepositsXlsx } from "../services/deposit-export.js";
+import { saveSiteLogo } from "../services/site-logo.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
+
+function parseBrandTheme(value: unknown): "light" | "dark" {
+  return String(value ?? "light") === "dark" ? "dark" : "light";
+}
+
+function parseReconciliationRange(q: { from?: string; to?: string }) {
+  const to = q.to ? new Date(`${q.to}T23:59:59`) : new Date();
+  const from = q.from ? new Date(`${q.from}T00:00:00`) : new Date(Date.now() - 30 * 86400000);
+  return { from, to };
+}
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/dashboard", async (request, reply) => {
@@ -133,6 +144,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         callbackUrlDeposit: body.callback_url_deposit ? String(body.callback_url_deposit) : null,
         brandColor: String(body.brand_color ?? "#2563EB"),
         brandBgColor: String(body.brand_bg_color ?? "#F4F7FC"),
+        brandTheme: parseBrandTheme(body.brand_theme),
         brandLogoUrl: body.brand_logo_url ? String(body.brand_logo_url) : null,
         depCommissionRate: Number(body.dep_commission_rate ?? 0),
       },
@@ -153,12 +165,48 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         callbackUrlDeposit: body.callback_url_deposit != null ? String(body.callback_url_deposit) : undefined,
         brandColor: body.brand_color ? String(body.brand_color) : undefined,
         brandBgColor: body.brand_bg_color ? String(body.brand_bg_color) : undefined,
+        brandTheme: body.brand_theme != null ? parseBrandTheme(body.brand_theme) : undefined,
         brandLogoUrl: body.brand_logo_url != null ? String(body.brand_logo_url) : undefined,
         isActive: body.is_active != null ? Boolean(body.is_active) : undefined,
         depCommissionRate: body.dep_commission_rate != null ? Number(body.dep_commission_rate) : undefined,
       },
     });
     ok(reply, { site });
+  });
+
+  app.post("/upload_site_logo", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    const body = request.body as {
+      site_id?: number;
+      filename?: string;
+      content_base64?: string;
+    };
+
+    const siteId = Number(body.site_id);
+    if (!Number.isFinite(siteId) || siteId <= 0) {
+      error(reply, "Geçerli site_id gerekli", 422);
+      return;
+    }
+
+    const site = await prisma.site.findUnique({ where: { id: siteId } });
+    if (!site) {
+      error(reply, "Site bulunamadı", 404);
+      return;
+    }
+
+    try {
+      const logoUrl = await saveSiteLogo(
+        siteId,
+        String(body.filename ?? "logo.png"),
+        String(body.content_base64 ?? ""),
+      );
+      await prisma.site.update({ where: { id: siteId }, data: { brandLogoUrl: logoUrl } });
+      ok(reply, { url: logoUrl });
+    } catch (e) {
+      error(reply, e instanceof Error ? e.message : "Logo yüklenemedi", 422);
+    }
   });
 
   app.post("/toggle_site", async (request, reply) => {
@@ -496,8 +544,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!user) return;
 
     const q = request.query as { from?: string; to?: string };
-    const to = q.to ? new Date(`${q.to}T23:59:59`) : new Date();
-    const from = q.from ? new Date(`${q.from}T00:00:00`) : new Date(Date.now() - 30 * 86400000);
+    const { from, to } = parseReconciliationRange(q);
 
     const grouped = await prisma.deposit.groupBy({
       by: ["siteId"],
@@ -542,6 +589,62 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     ok(reply, { from: from.toISOString(), to: to.toISOString(), rows, totals });
   });
 
+  app.get("/site_reconciliation/export", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    const q = request.query as { from?: string; to?: string; site_id?: string };
+    const { from, to } = parseReconciliationRange(q);
+    const siteId = q.site_id ? Number(q.site_id) : null;
+
+    if (q.site_id && (!siteId || !Number.isFinite(siteId))) {
+      error(reply, "Geçersiz site_id", 422);
+      return;
+    }
+
+    const deposits = await prisma.deposit.findMany({
+      where: {
+        status: "approved",
+        approvedAt: { gte: from, lte: to },
+        siteId: siteId ?? { not: null },
+      },
+      include: { site: { select: { name: true } } },
+      orderBy: [{ approvedAt: "asc" }, { id: "asc" }],
+    });
+
+    const rows = deposits.map((d) => {
+      const amount = Number(d.amount);
+      const commission = Number(d.commissionAmount);
+      return {
+        reference: d.reference,
+        siteName: d.site?.name ?? "—",
+        userId: d.userId,
+        amount,
+        commission,
+        net: amount - commission,
+        status: d.status,
+        pspProvider: d.pspProvider,
+        externalId: d.externalId,
+        createdAt: d.createdAt.toISOString(),
+        approvedAt: d.approvedAt?.toISOString() ?? null,
+      };
+    });
+
+    const fileFrom = q.from ?? from.toISOString().slice(0, 10);
+    const fileTo = q.to ?? to.toISOString().slice(0, 10);
+    const siteSuffix = siteId ? `-site${siteId}` : "";
+    const filename = `site-mutabakat${siteSuffix}-${fileFrom}_${fileTo}.xlsx`;
+
+    const buffer = buildSiteDepositsXlsx(rows);
+    reply
+      .header(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .send(buffer);
+  });
+
   app.get("/supheliler", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
@@ -551,59 +654,6 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "desc" },
     });
     ok(reply, { items });
-  });
-
-  app.get("/reconciliation", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const items = await prisma.pspSettlement.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
-    ok(reply, { items });
-  });
-
-  app.post("/reconciliation/import", async (request, reply) => {
-    const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
-    const body = request.body as {
-      provider?: string;
-      period_start?: string;
-      period_end?: string;
-      gross_amount?: number;
-      fee_amount?: number;
-      net_amount?: number;
-    };
-
-    const provider = String(body.provider ?? "").trim();
-    if (!provider || !isKnownProvider(provider)) {
-      error(reply, "Geçerli provider gerekli (paytr, stripe, sumup)", 422);
-      return;
-    }
-
-    const settlement = await prisma.pspSettlement.create({
-      data: {
-        provider,
-        periodStart: new Date(body.period_start ?? Date.now()),
-        periodEnd: new Date(body.period_end ?? Date.now()),
-        grossAmount: body.gross_amount ?? 0,
-        feeAmount: body.fee_amount ?? 0,
-        netAmount: body.net_amount ?? 0,
-        status: "pending",
-      },
-    });
-
-    const matched = await prisma.deposit.count({
-      where: {
-        status: "approved",
-        pspProvider: settlement.provider,
-        approvedAt: { gte: settlement.periodStart, lte: settlement.periodEnd },
-      },
-    });
-
-    await prisma.pspSettlement.update({
-      where: { id: settlement.id },
-      data: { matchedCount: matched, status: matched > 0 ? "partial" : "pending" },
-    });
-
-    ok(reply, { settlement, matched });
   });
 
   app.get("/pos_methods", async (request, reply) => {

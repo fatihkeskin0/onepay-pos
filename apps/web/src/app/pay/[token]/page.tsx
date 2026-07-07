@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Spinner } from "@/components/ui/Spinner";
 import { StripePaymentPanel } from "@/components/pay/StripePaymentPanel";
+import { resolveBrandLogoUrl } from "@/lib/brand-logo";
 
 type PayState = "entry" | "ready" | "pending" | "success" | "rejected" | "expired";
 type PspRenderMode = "redirect" | "iframe" | "stripe_elements";
+type PayTheme = "light" | "dark";
 
 interface PayLimits {
   min: number;
@@ -19,7 +21,7 @@ interface SessionInfo {
   amount: number;
   user_name: string;
   site_name: string;
-  brand: { color: string; bg: string; logo: string | null; name: string };
+  brand: { color: string; bg: string; theme: PayTheme; logo: string | null; name: string };
 }
 
 function brandDarken(hex: string, factor = 0.82): string {
@@ -81,17 +83,15 @@ export default function PayPage() {
   const [loadingInit, setLoadingInit] = useState(true);
   const [stripeProcessing, setStripeProcessing] = useState(false);
 
-  const brand = session?.brand ?? { color: "#2563EB", bg: "#F4F7FC", logo: null, name: "OnePOS" };
-
-  useEffect(() => {
-    document.documentElement.style.setProperty("--pay-accent", brand.color);
-    document.documentElement.style.setProperty("--pay-accent-dark", brandDarken(brand.color));
-    document.documentElement.style.setProperty("--pay-bg", brand.bg);
-  }, [brand]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty("--pay-progress", `${progress}%`);
-  }, [progress]);
+  const brand = session?.brand ?? {
+    color: "#2563EB",
+    bg: "#F4F7FC",
+    theme: "light" as PayTheme,
+    logo: null,
+    name: "OnePOS",
+  };
+  const brandLogoSrc = resolveBrandLogoUrl(brand.logo);
+  const payTheme = brand.theme === "dark" ? "dark" : "light";
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -263,27 +263,41 @@ export default function PayPage() {
   const displayAmount = useMemo(() => formatAmount(amount || 0), [amount]);
 
   return (
-    <div className="pay-page">
+    <div
+      className="pay-page"
+      data-pay-theme={payTheme}
+      style={
+        {
+          "--pay-accent": brand.color,
+          "--pay-accent-dark": brandDarken(brand.color),
+          "--pay-bg": brand.bg,
+          "--pay-progress": `${progress}%`,
+        } as CSSProperties
+      }
+    >
       <div className="pay-shell">
         <article className="pay-card">
           <header className="pay-card-header">
-            <div className="pay-brand-row">
-              <div className="pay-brand-icon">
-                {brand.logo ? (
-                  <img src={brand.logo} alt="" width={40} height={40} />
-                ) : (
-                  brand.name.slice(0, 2).toUpperCase()
-                )}
-              </div>
-              <div>
-                <div className="pay-brand-name">{brand.name}</div>
-                <div className="pay-brand-meta">Kredi kartı yatırım</div>
-              </div>
+            <div className="pay-header-bar">
+              <span className="pay-secure-badge">
+                <Icon name="shield" size={12} />
+                Güvenli
+              </span>
             </div>
-            <span className="pay-secure-badge">
-              <Icon name="shield" size={12} />
-              Güvenli
-            </span>
+            <div className={`pay-brand-center${brandLogoSrc ? " pay-brand-center--logo" : ""}`}>
+              {brandLogoSrc ? (
+                <>
+                  <img className="pay-brand-logo" src={brandLogoSrc} alt={brand.name} />
+                  <div className="pay-brand-meta">Kredi kartı yatırım</div>
+                </>
+              ) : (
+                <>
+                  <div className="pay-brand-fallback">{brand.name.slice(0, 2).toUpperCase()}</div>
+                  <div className="pay-brand-name">{brand.name}</div>
+                  <div className="pay-brand-meta">Kredi kartı yatırım</div>
+                </>
+              )}
+            </div>
           </header>
 
           <PaySteps state={state} />

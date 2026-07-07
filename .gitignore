@@ -40,6 +40,10 @@ onepay/
 # Local reference docs (exported HTML/PDF, not part of app)
 betco-doc/
 
+# Uploaded site logos (keep directory via .gitkeep)
+/data/uploads/*
+!/data/uploads/.gitkeep
+
 # IDE / local tooling
 .cursor/
 .vscode/

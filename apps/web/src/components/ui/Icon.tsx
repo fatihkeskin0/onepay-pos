@@ -32,7 +32,6 @@ const navMap: Record<string, string> = {
   globe: "adm-siteler",
   receipt: "adm-site-mutabakat",
   bank: "adm-pos",
-  sync: "adm-reconciliation",
   report: "adm-raporlar",
   chart: "adm-raporlar",
   online: "adm-monitor",

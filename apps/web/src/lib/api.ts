@@ -54,6 +54,45 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const API = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  download: async (path: string, filename: string): Promise<void> => {
+    const token = typeof window !== "undefined" ? localStorage.getItem(LS_KEYS.token) : null;
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, { method: "GET", headers });
+    } catch {
+      throw new Error("Sunucuya ulaşılamıyor");
+    }
+
+    if (res.status === 401) {
+      if (token) {
+        clearSessionKeepPreferences();
+        window.location.href = "/login";
+      }
+      throw new Error("Yetkisiz");
+    }
+
+    if (!res.ok) {
+      let message = "İndirme başarısız";
+      try {
+        const data = (await res.json()) as { message?: string };
+        if (data.message) message = data.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  },
   token: () => (typeof window !== "undefined" ? localStorage.getItem(LS_KEYS.token) : null),
   role: () => (typeof window !== "undefined" ? localStorage.getItem(LS_KEYS.role) : null),
   username: () => (typeof window !== "undefined" ? localStorage.getItem(LS_KEYS.username) : null),

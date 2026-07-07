@@ -39,7 +39,7 @@ Panel runs on `APP_BASE_URL` (production: `https://app.onekart.info`) without a 
 |-------|---------|
 | `/pos` | POS provider settings (active/default, min/max) |
 | `/sites` | Site management + `dep_commission_rate` |
-| `/site-reconciliation` | Per-site gross/commission/net report |
+| `/site-reconciliation` | Per-site summary + approved deposits XLSX export |
 | `/settings` | Account settings |
 
 Landing and API docs: `APP_MARKETING_URL` (e.g. `https://onekart.info`, `/docs`).

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getDocsContent } from "./content";
 import { SAMPLE_BC_CALLBACK, SAMPLE_BC_CALLBACK_RESPONSE } from "./shared-samples";
@@ -39,6 +38,23 @@ function IconGlobe() {
       <circle cx="12" cy="12" r="10" />
       <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
       <path d="M2 12h20" />
+    </svg>
+  );
+}
+
+function IconCopy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
@@ -119,15 +135,64 @@ function StatusPills({ pills, locale }: { pills: DocsStatusPill[]; locale: DocsL
   );
 }
 
-function CodeBlock({ label, code }: { label: string; code: string }) {
+function CopyCodePanel({
+  code,
+  label,
+  locale,
+  tone = "default",
+}: {
+  code: string;
+  label?: string;
+  locale: DocsLocale;
+  tone?: "default" | "blue" | "green";
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copyLabel = locale === "tr" ? "Panoya kopyala" : "Copy to clipboard";
+  const copiedLabel = locale === "tr" ? "Kopyalandı" : "Copied";
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }, [code]);
+
+  const preClass = [
+    "docs-pre",
+    "docs-pre--dark",
+    tone === "blue" ? "docs-pre--blue" : "",
+    tone === "green" ? "docs-pre--green" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="docs-code-block">
-      <div className="docs-code-label">{label}</div>
-      <pre className="docs-pre docs-pre--dark">
-        <code>{code}</code>
-      </pre>
+      {label ? <div className="docs-code-label">{label}</div> : null}
+      <div className="docs-pre-shell">
+        <button
+          type="button"
+          className={`docs-copy-btn${copied ? " docs-copy-btn--done" : ""}`}
+          onClick={() => void onCopy()}
+          aria-label={copied ? copiedLabel : copyLabel}
+          title={copied ? copiedLabel : copyLabel}
+        >
+          {copied ? <IconCheck /> : <IconCopy />}
+        </button>
+        <pre className={preClass}>
+          <code>{code}</code>
+        </pre>
+      </div>
     </div>
   );
+}
+
+function CodeBlock({ label, code, locale }: { label: string; code: string; locale: DocsLocale }) {
+  return <CopyCodePanel label={label} code={code} locale={locale} />;
 }
 
 function MetaBlock({ items }: { items: DocsMetaItem[] }) {
@@ -187,22 +252,22 @@ function EndpointBlock({ ep, locale }: { ep: DocsEndpointDoc; locale: DocsLocale
       <h3 className="docs-endpoint-title">{ep.title}</h3>
       <div className="docs-endpoint-head">
         <MethodBadge method={ep.method} />
-        <strong>{ep.path}</strong>
+        <code className="docs-endpoint-path">{ep.path}</code>
       </div>
       <p className="docs-endpoint-desc">{ep.description}</p>
       <MetaBlock items={ep.meta} />
       <ParamTable title={ep.paramTitle} params={ep.params} locale={locale} />
       {ep.statusPills ? <StatusPills pills={ep.statusPills} locale={locale} /> : null}
-      {ep.notes?.map((note) => (
-        <div key={note} className="docs-note">
-          <pre className="docs-pre docs-pre--dark docs-pre--compact">
-            <code>{note}</code>
-          </pre>
-        </div>
-      ))}
+      {ep.notes && ep.notes.length > 0 ? (
+        <ul className="docs-notes-list">
+          {ep.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
       <div className="docs-code-grid">
-        <CodeBlock label={ep.requestLabel} code={ep.requestSample} />
-        <CodeBlock label={ep.responseLabel} code={ep.responseSample} />
+        <CodeBlock label={ep.requestLabel} code={ep.requestSample} locale={locale} />
+        <CodeBlock label={ep.responseLabel} code={ep.responseSample} locale={locale} />
       </div>
       <ErrorTable title={ep.errorTitle} errors={ep.errors} locale={locale} />
     </div>
@@ -247,44 +312,46 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
         <h2 className="docs-h2">{c.webhook.title}</h2>
         <p className="docs-text">{c.webhook.intro}</p>
 
-        <div className="docs-param-title">{c.webhook.tableTitle}</div>
-        <div className="docs-table-wrap">
-          <table className="docs-table">
-            <thead>
-              <tr>
-                {c.webhook.tableHeaders.map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {c.webhook.rows.map((row) => (
-                <tr key={row.statusCode}>
-                  <td>
-                    <code className="docs-code-ok">StatusCode {row.statusCode}</code>
-                  </td>
-                  <td>{row.when}</td>
-                  <td>{row.action}</td>
+        <div className="docs-subsection">
+          <div className="docs-param-title">{c.webhook.tableTitle}</div>
+          <div className="docs-table-wrap">
+            <table className="docs-table">
+              <thead>
+                <tr>
+                  {c.webhook.tableHeaders.map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {c.webhook.rows.map((row) => (
+                  <tr key={row.statusCode}>
+                    <td>
+                      <code className="docs-code-ok">StatusCode {row.statusCode}</code>
+                    </td>
+                    <td>{row.when}</td>
+                    <td>{row.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className="docs-param-title">{c.webhook.payloadTitle}</div>
-        <pre className="docs-pre docs-pre--dark docs-pre--blue">
-          <code>{SAMPLE_BC_CALLBACK}</code>
-        </pre>
+        <div className="docs-subsection">
+          <div className="docs-param-title">{c.webhook.payloadTitle}</div>
+          <CopyCodePanel code={SAMPLE_BC_CALLBACK} locale={locale} tone="blue" />
+        </div>
 
-        <div className="docs-param-title">{c.webhook.responseTitle}</div>
-        <pre className="docs-pre docs-pre--dark docs-pre--green">
-          <code>{SAMPLE_BC_CALLBACK_RESPONSE}</code>
-        </pre>
+        <div className="docs-subsection">
+          <div className="docs-param-title">{c.webhook.responseTitle}</div>
+          <CopyCodePanel code={SAMPLE_BC_CALLBACK_RESPONSE} locale={locale} tone="green" />
+        </div>
 
-        <div className="docs-param-title">{c.webhook.checksumTitle}</div>
-        <pre className="docs-pre docs-pre--dark">
-          <code>{c.webhook.checksumSample}</code>
-        </pre>
+        <div className="docs-subsection">
+          <div className="docs-param-title">{c.webhook.checksumTitle}</div>
+          <CopyCodePanel code={c.webhook.checksumSample} locale={locale} />
+        </div>
 
         <div className="docs-setup-box">
           <h4>{c.webhook.setupTitle}</h4>
@@ -360,7 +427,6 @@ export function DocsPageClient() {
               EN
             </button>
           </div>
-          <Link href="/">{c.nav.home}</Link>
         </nav>
       </header>
 

@@ -115,12 +115,15 @@ export async function depositCancelled(
   apiKey: string,
   callbackUrl: string,
 ): Promise<void> {
+  // Cancelled/expired deposits never credit the user — same outcome as a
+  // rejection. The public callback contract only defines StatusCode 1 & 2, so
+  // report cancellations as StatusCode 2 (Rejected) to stay on-contract.
   await fireCallback(callbackUrl, apiKey, {
     TraderKey: apiKey,
     TransactionID: deposit.id,
     UserCode: deposit.userId,
     Amount: deposit.amount,
-    StatusCode: 3,
+    StatusCode: 2,
     StatusMessage: deposit.rejectReason || "Yatırım talebi iptal edildi.",
     CustomField: deposit.externalId ?? "",
   });

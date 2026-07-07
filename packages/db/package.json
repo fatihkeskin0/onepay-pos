@@ -10,7 +10,7 @@
     "generate": "prisma generate",
     "push": "dotenv -e ../../.env -- prisma db push",
     "migrate": "dotenv -e ../../.env -- prisma migrate dev",
-    "deploy": "prisma migrate deploy",
+    "deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "seed:prod": "tsx prisma/seed.ts"
   },

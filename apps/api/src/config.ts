@@ -101,6 +101,9 @@ export const config = {
       merchantCode: process.env.SUMUP_MERCHANT_CODE ?? "",
     },
   },
+  upload: {
+    dir: envFirst("UPLOAD_DIR") ?? resolve(__dirname, "../../../data/uploads"),
+  },
 } as const;
 
 const DEV_APP_SECRET = "dev-secret-change-in-production";
