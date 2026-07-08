@@ -1,6 +1,5 @@
-# Production stack for Coolify — use Docker Compose Location: /docker-compose.yaml
-# Uses external PostgreSQL + Redis (Coolify managed resources).
-# Set DATABASE_URL and REDIS_URL in Coolify env to the external connection strings.
+# Production stack for Coolify — Docker Compose Location: /docker-compose.yaml
+# Env template: .env.production.example
 
 services:
   api:
@@ -16,12 +15,22 @@ services:
       REDIS_URL: ${REDIS_URL:?set REDIS_URL}
       APP_SECRET: ${APP_SECRET:?set APP_SECRET}
       APP_ENV: production
+      APP_MARKETING_URL: ${APP_MARKETING_URL:?set APP_MARKETING_URL}
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       APP_PAYMENT_URL: ${APP_PAYMENT_URL:?set APP_PAYMENT_URL}
       API_PORT: 80
       API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
       API_HOST: 0.0.0.0
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      UPLOAD_DIR: /app/data/uploads
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_ORIGIN_IP: ${CLOUDFLARE_ORIGIN_IP:-}
+      CLOUDFLARE_ZONE_ID_ONEKART: ${CLOUDFLARE_ZONE_ID_ONEKART:-}
+      CLOUDFLARE_ZONE_ID_ODEME: ${CLOUDFLARE_ZONE_ID_ODEME:-}
+      CLOUDFLARE_ZONE_DOMAIN_ONEKART: ${CLOUDFLARE_ZONE_DOMAIN_ONEKART:-onekart.info}
+      CLOUDFLARE_ZONE_DOMAIN_ODEME: ${CLOUDFLARE_ZONE_DOMAIN_ODEME:-odeme.click}
+      CLOUDFLARE_AUTO_SYNC: ${CLOUDFLARE_AUTO_SYNC:-1}
       BC_SECRET: ${BC_SECRET:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       PSP_DEFAULT_PROVIDER: ${PSP_DEFAULT_PROVIDER:-stripe}
@@ -34,7 +43,6 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       SUMUP_API_KEY: ${SUMUP_API_KEY:-}
       SUMUP_MERCHANT_CODE: ${SUMUP_MERCHANT_CODE:-}
-      UPLOAD_DIR: /app/data/uploads
     volumes:
       - uploads_data:/app/data/uploads
     healthcheck:

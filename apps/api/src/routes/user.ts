@@ -47,12 +47,32 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as Record<string, unknown>;
     const userId = String(body.user_id ?? "").trim();
     const amount = Number(body.amount ?? 0);
-    const userName = String(body.name ?? body.user_name ?? "");
+    const userName = String(body.name ?? body.user_name ?? "").trim();
     const returnUrl = String(body.return_url ?? "").trim();
-    const externalId = body.transaction_id != null ? String(body.transaction_id).trim() : "";
+    const externalId = String(body.transaction_id ?? "").trim();
 
     if (!userId) {
       error(reply, "user_id gerekli", 400);
+      return;
+    }
+
+    if (!userName) {
+      error(reply, "name gerekli", 400);
+      return;
+    }
+
+    if (userName.length > 100) {
+      error(reply, "name en fazla 100 karakter olabilir", 400);
+      return;
+    }
+
+    if (!externalId) {
+      error(reply, "transaction_id gerekli", 400);
+      return;
+    }
+
+    if (externalId.length > 128) {
+      error(reply, "transaction_id en fazla 128 karakter olabilir", 400);
       return;
     }
 

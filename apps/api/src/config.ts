@@ -24,9 +24,15 @@ function coolifyServiceUrl(urlKey: string, fqdnKey: string): string | undefined 
   return fqdn.startsWith("http://") || fqdn.startsWith("https://") ? fqdn : `https://${fqdn}`;
 }
 
+const marketingUrl =
+  envFirst("APP_MARKETING_URL") ??
+  coolifyServiceUrl("SERVICE_URL_MARKETING", "SERVICE_FQDN_MARKETING") ??
+  undefined;
+
 const panelUrl =
   envFirst("APP_BASE_URL") ??
   coolifyServiceUrl("SERVICE_URL_WEB", "SERVICE_FQDN_WEB") ??
+  marketingUrl ??
   `http://localhost:${webPort}`;
 
 const paymentUrl =
@@ -39,6 +45,25 @@ const apiPublicUrl =
   coolifyServiceUrl("SERVICE_URL_API", "SERVICE_FQDN_API") ??
   `http://localhost:${apiPort}`;
 
+function cloudflareZones(): Array<{ id: string; domain: string }> {
+  const zones: Array<{ id: string; domain: string }> = [];
+  const onekartId = envFirst("CLOUDFLARE_ZONE_ID_ONEKART");
+  const odemeId = envFirst("CLOUDFLARE_ZONE_ID_ODEME");
+  if (onekartId) {
+    zones.push({
+      id: onekartId,
+      domain: envFirst("CLOUDFLARE_ZONE_DOMAIN_ONEKART") ?? "onekart.info",
+    });
+  }
+  if (odemeId) {
+    zones.push({
+      id: odemeId,
+      domain: envFirst("CLOUDFLARE_ZONE_DOMAIN_ODEME") ?? "odeme.click",
+    });
+  }
+  return zones;
+}
+
 function resolveCorsOrigins(): string | string[] {
   const explicit = envFirst("CORS_ORIGIN");
   if (explicit) {
@@ -47,10 +72,6 @@ function resolveCorsOrigins(): string | string[] {
     if (parts.length === 1) return parts[0] ?? panelUrl;
     return parts;
   }
-
-  const marketingUrl =
-    envFirst("APP_MARKETING_URL") ??
-    coolifyServiceUrl("SERVICE_URL_MARKETING", "SERVICE_FQDN_MARKETING");
 
   const origins = [...new Set([panelUrl, paymentUrl, marketingUrl].filter((x): x is string => Boolean(x)))];
   if (origins.length <= 1) return origins[0] ?? panelUrl;
@@ -68,8 +89,16 @@ export const config = {
     secret: process.env.APP_SECRET ?? "dev-secret-change-in-production",
     env: process.env.APP_ENV ?? "development",
     webPort,
+    marketingUrl: marketingUrl ?? panelUrl,
     baseUrl: panelUrl,
     paymentUrl,
+  },
+  cloudflare: {
+    apiToken: process.env.CLOUDFLARE_API_TOKEN ?? "",
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "",
+    originIp: process.env.CLOUDFLARE_ORIGIN_IP ?? "",
+    autoSync: process.env.CLOUDFLARE_AUTO_SYNC === "1",
+    zones: cloudflareZones(),
   },
   api: {
     port: apiPort,

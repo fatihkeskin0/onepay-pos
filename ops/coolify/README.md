@@ -30,11 +30,26 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
 9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
 
-## Cloudflare (manual — until API integration)
+## Cloudflare (API integration)
 
-Production traffic stays **behind Cloudflare proxy** (orange cloud). Do not disable proxy or switch to DNS-only for normal operation.
+Production traffic stays **behind Cloudflare proxy** (orange cloud). Set env on the **api** service:
 
-Apply the same settings on **each zone** (`onekart.info`, `odeme.click` if separate):
+| Variable | Example |
+|----------|---------|
+| `CLOUDFLARE_API_TOKEN` | Custom token (secret) |
+| `CLOUDFLARE_ACCOUNT_ID` | `14cc9d8a8239fc9bc69265d82d9d8aa2` |
+| `CLOUDFLARE_ORIGIN_IP` | Coolify server public IP |
+| `CLOUDFLARE_ZONE_ID_ONEKART` | `583a4c1b8eca2293926b4926b462a215` |
+| `CLOUDFLARE_ZONE_ID_ODEME` | `7aba743cb513d4e7c9a8d6fc4e7863e7` |
+| `CLOUDFLARE_AUTO_SYNC` | `1` — sync DNS + SSL on API startup |
+
+Also set `APP_MARKETING_URL` on the **api** service (DNS host derivation).
+
+**Admin → Ayarlar → Cloudflare**: status table + manual sync (DNS / SSL / full).
+
+Sync creates **A records** with **proxied=true** for hosts from `APP_MARKETING_URL`, `APP_BASE_URL`, `API_PUBLIC_URL`, `APP_PAYMENT_URL`. SSL: **Full (strict)** + **Always HTTPS**.
+
+### Manual dashboard settings (fallback)
 
 | Setting | Value | Notes |
 |---------|--------|--------|
@@ -56,8 +71,6 @@ DNS records (all **Proxied** → same Coolify server IP):
 If `odeme.click` is a separate zone, its A/CNAME must point to the **same origin IP** as `onekart.info`.
 
 **Do not use for production:** grey cloud (DNS only), Flexible SSL, or pausing Cloudflare orange proxy — use only for short-lived debugging.
-
-**Planned:** Cloudflare Account API integration (API token) for automated DNS/SSL management — not wired yet; configure manually in the dashboard until then.
 
 ## Post-deploy verification
 

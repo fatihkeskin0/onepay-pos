@@ -11,6 +11,7 @@ import { formatBcExpiry } from "../services/format.js";
 import { getActivityLogs } from "../services/activity-log.js";
 import { buildSiteDepositsXlsx } from "../services/deposit-export.js";
 import { saveSiteLogo } from "../services/site-logo.js";
+import { getCloudflareStatus, isCloudflareConfigured, syncCloudflare } from "../services/cloudflare.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -422,6 +423,39 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       await invalidateSettingCache(key);
     }
     ok(reply, {});
+  });
+
+  app.get("/cloudflare/status", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    try {
+      const status = await getCloudflareStatus();
+      ok(reply, status as unknown as Record<string, unknown>);
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Cloudflare status failed", 500);
+    }
+  });
+
+  app.post("/cloudflare/sync", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    if (!isCloudflareConfigured()) {
+      error(reply, "Cloudflare yapılandırılmamış (token, origin IP, zone ID)", 400);
+      return;
+    }
+
+    const body = (request.body ?? {}) as { dns?: boolean; ssl?: boolean };
+    try {
+      const result = await syncCloudflare({
+        dns: body.dns !== false,
+        ssl: body.ssl !== false,
+      });
+      ok(reply, result as unknown as Record<string, unknown>);
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Cloudflare sync failed", 500);
+    }
   });
 
   app.get("/applications", async (request, reply) => {
