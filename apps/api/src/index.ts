@@ -5,6 +5,7 @@ import fastifyStatic from "@fastify/static";
 import fastifyRawBody from "fastify-raw-body";
 import { join } from "node:path";
 import { config } from "./config.js";
+import { createAppLogger, DEV_QUIET_ROUTE_PATHS } from "./logger.js";
 import { error } from "./services/response.js";
 import { userRoutes } from "./routes/user.js";
 import { cashierRoutes } from "./routes/cashier.js";
@@ -81,8 +82,17 @@ async function autoCancelDeposits(): Promise<void> {
 }
 
 const app = Fastify({
-  logger: config.app.env === "development" ? true : { level: process.env.LOG_LEVEL ?? "info" },
+  logger: createAppLogger(),
 });
+
+if (config.app.env === "development") {
+  app.addHook("onRoute", (routeOptions) => {
+    const path = routeOptions.url ?? "";
+    if (DEV_QUIET_ROUTE_PATHS.has(path)) {
+      routeOptions.logLevel = "silent";
+    }
+  });
+}
 
 await app.register(cors, {
   origin: config.app.env === "development" ? true : config.api.corsOrigin,

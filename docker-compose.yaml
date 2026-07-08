@@ -59,7 +59,7 @@ services:
       context: .
       dockerfile: ops/docker/Dockerfile.web
       args:
-        NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         INTERNAL_API_URL: http://api:80
     restart: unless-stopped
     networks:
