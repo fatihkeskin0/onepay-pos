@@ -16,6 +16,7 @@ export const PANEL_PUBLIC_SEGMENTS = [
   "login-logs",
   "reports",
   "suspicious",
+  "security",
   "announcements",
   "settings",
   "demo",
