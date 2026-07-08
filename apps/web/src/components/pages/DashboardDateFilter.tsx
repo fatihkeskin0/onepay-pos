@@ -40,7 +40,7 @@ function formatRangeLabel(from: string, to: string): string {
 }
 
 function clampRange(from: Date, to: Date, today: Date): DashboardDateRange {
-  let toDate = to > today ? today : to;
+  const toDate = to > today ? today : to;
   let fromDate = from > toDate ? toDate : from;
 
   if (differenceInCalendarDays(toDate, fromDate) > MAX_RANGE_DAYS) {
