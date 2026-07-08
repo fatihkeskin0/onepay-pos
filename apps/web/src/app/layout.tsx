@@ -9,9 +9,21 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const apiPublicUrl =
+    process.env.API_PUBLIC_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_URL?.trim() ||
+    "";
+
   return (
     <html lang="tr" suppressHydrationWarning className={GeistSans.variable}>
       <head>
+        {apiPublicUrl ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.__ONEPOS_API__=${JSON.stringify(apiPublicUrl)};`,
+            }}
+          />
+        ) : null}
         <script
           dangerouslySetInnerHTML={{
             __html: `try{var t=localStorage.getItem('rf_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}`,

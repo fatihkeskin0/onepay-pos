@@ -36,6 +36,7 @@ const nextConfig = {
     APP_MARKETING_URL: process.env.APP_MARKETING_URL ?? "",
     APP_BASE_URL: process.env.APP_BASE_URL ?? "",
     APP_PAYMENT_URL: process.env.APP_PAYMENT_URL ?? "",
+    API_PUBLIC_URL: process.env.API_PUBLIC_URL ?? "",
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "",
   },
   webpack: (config, { dev }) => {
