@@ -23,8 +23,8 @@ export const enContent: DocsContent = {
     securityBody:
       "The X-Api-Key header is required for create_payment_link. Send it from your backend only; never expose the key in browser code.",
     baseUrlTitle: "Base URL",
-    baseUrlValue: "/backend/user/",
-    baseUrlNote: "Prepend your site origin to these paths (e.g. https://your-domain.com/backend/user/). Parameter names are case-sensitive.",
+    baseUrlValue: "https://onekart.info/backend/user/",
+    baseUrlNote: "Every endpoint below is an absolute URL under this base. Parameter names are case-sensitive.",
   },
   endpointsSectionTitle: "API Endpoints",
   endpoints: [
@@ -32,7 +32,7 @@ export const enContent: DocsContent = {
       id: "create-payment-link",
       title: "Create Payment Link",
       method: "POST",
-      path: "/backend/user/create_payment_link",
+      path: "https://onekart.info/backend/user/create_payment_link",
       description:
         "Generates a single-use payment page link. Redirect the customer to the url field in the response to open the credit card checkout.",
       meta: [
@@ -48,8 +48,8 @@ export const enContent: DocsContent = {
         { name: "user_id", type: "string (max. 100)", required: "yes", description: "Unique customer ID in your system. Returned as UserCode in the callback." },
         { name: "amount", type: "float (max. 18,2)", required: "yes", description: "Deposit amount (TRY). Minimum is defined by your site settings. Use a dot as the decimal separator." },
         { name: "return_url", type: "string (max. 500)", required: "optional", description: "URL to redirect the customer to after payment." },
-        { name: "transaction_id", type: "string (max. 128)", required: "optional", description: "Your unique transaction ID. Returned in the CustomField of the callback; empty string if omitted." },
-        { name: "name", type: "string (max. 100)", required: "optional", description: "Customer full name. Displayed on the payment page. Alias: user_name." },
+        { name: "transaction_id", type: "string (max. 128)", required: "yes", description: "Your unique transaction ID. Returned in the CustomField of the callback." },
+        { name: "name", type: "string (max. 100)", required: "yes", description: "Customer full name. Displayed on the payment page. Alias: user_name." },
       ],
       requestLabel: "Request Example (cURL)",
       requestSample: SAMPLE_CREATE_PAYMENT_LINK_REQ,
@@ -72,7 +72,7 @@ export const enContent: DocsContent = {
       id: "deposit-status",
       title: "Deposit Status",
       method: "GET",
-      path: "/backend/user/deposit_status",
+      path: "https://onekart.info/backend/user/deposit_status",
       description:
         "Queries the current status of a deposit. ref and token are deposit credentials created when the customer starts checkout; they are not returned by create_payment_link. For merchant backends, use the deposit callback instead of polling.",
       meta: [
@@ -120,7 +120,7 @@ export const enContent: DocsContent = {
     setupTitle: "Notes",
     setupItems: [
       "Amount is always formatted with 2 decimal places (e.g. \"1500.00\").",
-      "TraderKey is your site API key; CustomField carries the transaction_id you sent (empty string if omitted).",
+      "TraderKey is your site API key; CustomField carries the transaction_id you sent.",
       "Cancelled and timed-out deposits are reported with StatusCode 2, same as rejections.",
       "Callback requests time out after 10 seconds. Non-2xx responses are logged to the server console only; they are not retried.",
     ],

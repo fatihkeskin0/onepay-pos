@@ -1,50 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getDocsContent } from "./content";
+import { useCallback, useState } from "react";
+import { docsContent as c } from "./content";
 import { SAMPLE_BC_CALLBACK, SAMPLE_BC_CALLBACK_RESPONSE } from "./shared-samples";
 import type {
-  DocsContent,
   DocsEndpointDoc,
   DocsErrorRow,
-  DocsLocale,
   DocsMetaItem,
   DocsParamRow,
   DocsStatusPill,
 } from "./types";
 
-const STORAGE_KEY = "onepos-docs-locale";
-
-function IconBook() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 7v14" />
-      <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
-    </svg>
-  );
-}
-
 function IconShield() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
     </svg>
   );
 }
 
-function IconGlobe() {
+function IconAnchor() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-      <path d="M2 12h20" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="5" r="3" />
+      <path d="M12 22V8M5 12H2a10 10 0 0 0 10 10 10 10 0 0 0 10-10h-3" />
     </svg>
   );
 }
 
 function IconCopy() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -53,7 +39,7 @@ function IconCopy() {
 
 function IconCheck() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
@@ -63,30 +49,15 @@ function MethodBadge({ method }: { method: "POST" | "GET" }) {
   return <span className={`docs-method docs-method--${method.toLowerCase()}`}>{method}</span>;
 }
 
-function RequiredBadge({ value, locale }: { value: DocsParamRow["required"]; locale: DocsLocale }) {
-  const yes = locale === "tr" ? "Evet" : "Yes";
-  const optional = locale === "tr" ? "Opsiyonel" : "Optional";
+function RequiredTag({ value }: { value: DocsParamRow["required"] }) {
   return (
     <span className={`docs-required docs-required--${value}`}>
-      {value === "yes" ? yes : optional}
+      {value === "yes" ? "required" : "optional"}
     </span>
   );
 }
 
-function ParamTable({
-  title,
-  params,
-  locale,
-}: {
-  title: string;
-  params: DocsParamRow[];
-  locale: DocsLocale;
-}) {
-  const headers =
-    locale === "tr"
-      ? ["Parametre", "Tip", "Zorunlu", "Açıklama"]
-      : ["Parameter", "Type", "Required", "Description"];
-
+function ParamTable({ title, params }: { title: string; params: DocsParamRow[] }) {
   return (
     <>
       <div className="docs-param-title">{title}</div>
@@ -94,9 +65,10 @@ function ParamTable({
         <table className="docs-table docs-table--params">
           <thead>
             <tr>
-              {headers.map((h) => (
-                <th key={h}>{h}</th>
-              ))}
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
             </tr>
           </thead>
           <tbody>
@@ -107,7 +79,7 @@ function ParamTable({
                 </td>
                 <td className="docs-muted">{p.type}</td>
                 <td>
-                  <RequiredBadge value={p.required} locale={locale} />
+                  <RequiredTag value={p.required} />
                 </td>
                 <td>{p.description}</td>
               </tr>
@@ -119,11 +91,10 @@ function ParamTable({
   );
 }
 
-function StatusPills({ pills, locale }: { pills: DocsStatusPill[]; locale: DocsLocale }) {
-  const title = locale === "tr" ? "Durum Değerleri" : "Status Values";
+function StatusPills({ pills }: { pills: DocsStatusPill[] }) {
   return (
     <div className="docs-status-box">
-      <div className="docs-status-box-title">{title}</div>
+      <div className="docs-status-box-title">Status Values</div>
       <div className="docs-status-pills">
         {pills.map((p) => (
           <span key={p.value} className={`docs-status-pill docs-status-pill--${p.tone}`}>
@@ -138,18 +109,13 @@ function StatusPills({ pills, locale }: { pills: DocsStatusPill[]; locale: DocsL
 function CopyCodePanel({
   code,
   label,
-  locale,
   tone = "default",
 }: {
   code: string;
   label?: string;
-  locale: DocsLocale;
   tone?: "default" | "blue" | "green";
 }) {
   const [copied, setCopied] = useState(false);
-
-  const copyLabel = locale === "tr" ? "Panoya kopyala" : "Copy to clipboard";
-  const copiedLabel = locale === "tr" ? "Kopyalandı" : "Copied";
 
   const onCopy = useCallback(async () => {
     try {
@@ -178,8 +144,8 @@ function CopyCodePanel({
           type="button"
           className={`docs-copy-btn${copied ? " docs-copy-btn--done" : ""}`}
           onClick={() => void onCopy()}
-          aria-label={copied ? copiedLabel : copyLabel}
-          title={copied ? copiedLabel : copyLabel}
+          aria-label={copied ? "Copied" : "Copy to clipboard"}
+          title={copied ? "Copied" : "Copy to clipboard"}
         >
           {copied ? <IconCheck /> : <IconCopy />}
         </button>
@@ -189,10 +155,6 @@ function CopyCodePanel({
       </div>
     </div>
   );
-}
-
-function CodeBlock({ label, code, locale }: { label: string; code: string; locale: DocsLocale }) {
-  return <CopyCodePanel label={label} code={code} locale={locale} />;
 }
 
 function MetaBlock({ items }: { items: DocsMetaItem[] }) {
@@ -208,16 +170,7 @@ function MetaBlock({ items }: { items: DocsMetaItem[] }) {
   );
 }
 
-function ErrorTable({
-  title,
-  errors,
-  locale,
-}: {
-  title: string;
-  errors: DocsErrorRow[];
-  locale: DocsLocale;
-}) {
-  const headers = locale === "tr" ? ["HTTP", "Açıklama"] : ["HTTP", "Description"];
+function ErrorTable({ title, errors }: { title: string; errors: DocsErrorRow[] }) {
   return (
     <>
       <div className="docs-param-title">{title}</div>
@@ -225,9 +178,8 @@ function ErrorTable({
         <table className="docs-table">
           <thead>
             <tr>
-              {headers.map((h) => (
-                <th key={h}>{h}</th>
-              ))}
+              <th>HTTP</th>
+              <th>Description</th>
             </tr>
           </thead>
           <tbody>
@@ -246,18 +198,23 @@ function ErrorTable({
   );
 }
 
-function EndpointBlock({ ep, locale }: { ep: DocsEndpointDoc; locale: DocsLocale }) {
+function EndpointBlock({ ep, index }: { ep: DocsEndpointDoc; index: number }) {
   return (
     <div className="docs-endpoint-block" id={ep.id}>
-      <h3 className="docs-endpoint-title">{ep.title}</h3>
       <div className="docs-endpoint-head">
-        <MethodBadge method={ep.method} />
-        <code className="docs-endpoint-path">{ep.path}</code>
+        <span className="docs-endpoint-index">{String(index).padStart(2, "0")}</span>
+        <div className="docs-endpoint-headline">
+          <h3 className="docs-endpoint-title">{ep.title}</h3>
+          <div className="docs-endpoint-route">
+            <MethodBadge method={ep.method} />
+            <code className="docs-endpoint-path">{ep.path}</code>
+          </div>
+        </div>
       </div>
       <p className="docs-endpoint-desc">{ep.description}</p>
       <MetaBlock items={ep.meta} />
-      <ParamTable title={ep.paramTitle} params={ep.params} locale={locale} />
-      {ep.statusPills ? <StatusPills pills={ep.statusPills} locale={locale} /> : null}
+      <ParamTable title={ep.paramTitle} params={ep.params} />
+      {ep.statusPills ? <StatusPills pills={ep.statusPills} /> : null}
       {ep.notes && ep.notes.length > 0 ? (
         <ul className="docs-notes-list">
           {ep.notes.map((note) => (
@@ -266,22 +223,19 @@ function EndpointBlock({ ep, locale }: { ep: DocsEndpointDoc; locale: DocsLocale
         </ul>
       ) : null}
       <div className="docs-code-grid">
-        <CodeBlock label={ep.requestLabel} code={ep.requestSample} locale={locale} />
-        <CodeBlock label={ep.responseLabel} code={ep.responseSample} locale={locale} />
+        <CopyCodePanel label={ep.requestLabel} code={ep.requestSample} />
+        <CopyCodePanel label={ep.responseLabel} code={ep.responseSample} />
       </div>
-      <ErrorTable title={ep.errorTitle} errors={ep.errors} locale={locale} />
+      <ErrorTable title={ep.errorTitle} errors={ep.errors} />
     </div>
   );
 }
 
-function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
+function DocsBody() {
   return (
-    <main className="docs-main docs-sandbox-pane">
+    <main className="docs-main">
       <section className="docs-block" id="overview">
-        <div className="docs-kicker-row">
-          <IconBook />
-          <span className="docs-kicker">{c.hero.kicker}</span>
-        </div>
+        <span className="docs-eyebrow">{c.hero.kicker}</span>
         <h1>{c.hero.title}</h1>
         <p className="docs-lead">{c.hero.lead}</p>
 
@@ -294,7 +248,7 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
 
         <div className="docs-callout docs-callout--info">
           <div className="docs-callout-title">
-            <IconGlobe /> {c.hero.baseUrlTitle}
+            <IconAnchor /> {c.hero.baseUrlTitle}
           </div>
           <code className="docs-base-url">{c.hero.baseUrlValue}</code>
           <p className="docs-callout-note">{c.hero.baseUrlNote}</p>
@@ -303,8 +257,8 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
 
       <section className="docs-block" id="api-endpoints">
         <h2 className="docs-h2">{c.endpointsSectionTitle}</h2>
-        {c.endpoints.map((ep) => (
-          <EndpointBlock key={ep.id} ep={ep} locale={locale} />
+        {c.endpoints.map((ep, i) => (
+          <EndpointBlock key={ep.id} ep={ep} index={i + 1} />
         ))}
       </section>
 
@@ -340,17 +294,17 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
 
         <div className="docs-subsection">
           <div className="docs-param-title">{c.webhook.payloadTitle}</div>
-          <CopyCodePanel code={SAMPLE_BC_CALLBACK} locale={locale} tone="blue" />
+          <CopyCodePanel code={SAMPLE_BC_CALLBACK} tone="blue" />
         </div>
 
         <div className="docs-subsection">
           <div className="docs-param-title">{c.webhook.responseTitle}</div>
-          <CopyCodePanel code={SAMPLE_BC_CALLBACK_RESPONSE} locale={locale} tone="green" />
+          <CopyCodePanel code={SAMPLE_BC_CALLBACK_RESPONSE} tone="green" />
         </div>
 
         <div className="docs-subsection">
           <div className="docs-param-title">{c.webhook.checksumTitle}</div>
-          <CopyCodePanel code={c.webhook.checksumSample} locale={locale} />
+          <CopyCodePanel code={c.webhook.checksumSample} />
         </div>
 
         <div className="docs-setup-box">
@@ -367,82 +321,32 @@ function DocsBody({ c, locale }: { c: DocsContent; locale: DocsLocale }) {
 }
 
 export function DocsPageClient() {
-  const [locale, setLocale] = useState<DocsLocale>("tr");
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "tr" || stored === "en") {
-        setLocale(stored);
-      } else if (typeof navigator !== "undefined" && navigator.language.startsWith("en")) {
-        setLocale("en");
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setReady(true);
-    }
-  }, []);
-
-  const onLocaleChange = useCallback((next: DocsLocale) => {
-    setLocale(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
-    document.documentElement.lang = next;
-  }, []);
-
-  useEffect(() => {
-    if (ready) {
-      document.documentElement.lang = locale;
-    }
-  }, [locale, ready]);
-
-  const c = getDocsContent(locale);
-
   return (
     <div className="docs-wrap">
       <header className="docs-header">
         <div className="docs-brand">
           <div className="docs-logo">OP</div>
-          <span>OnePOS API</span>
+          <span>OnePOS</span>
+          <span className="docs-brand-tag">API Reference</span>
         </div>
-        <nav className="docs-nav">
-          <div className="docs-lang" role="group" aria-label="Documentation language">
-            <button
-              type="button"
-              className={`docs-lang-btn ${locale === "tr" ? "active" : ""}`}
-              onClick={() => onLocaleChange("tr")}
-            >
-              TR
-            </button>
-            <button
-              type="button"
-              className={`docs-lang-btn ${locale === "en" ? "active" : ""}`}
-              onClick={() => onLocaleChange("en")}
-            >
-              EN
-            </button>
-          </div>
-        </nav>
       </header>
 
       <div className="docs-layout">
         <aside className="docs-toc custom-scrollbar">
           <div className="docs-toc-title">{c.tocTitle}</div>
           <ul>
-            {c.toc.map((item) => (
+            {c.toc.map((item, i) => (
               <li key={item.id}>
-                <a href={`#${item.id}`}>{item.label}</a>
+                <a href={`#${item.id}`}>
+                  <span className="docs-toc-index">{String(i + 1).padStart(2, "0")}</span>
+                  {item.label}
+                </a>
               </li>
             ))}
           </ul>
         </aside>
 
-        <DocsBody c={c} locale={locale} />
+        <DocsBody />
       </div>
     </div>
   );

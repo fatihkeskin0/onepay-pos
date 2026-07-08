@@ -1,5 +1,3 @@
-export type DocsLocale = "tr" | "en";
-
 export type ParamRequired = "yes" | "optional";
 
 export interface DocsTocItem {
