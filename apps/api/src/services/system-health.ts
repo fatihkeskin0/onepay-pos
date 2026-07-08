@@ -37,7 +37,9 @@ export async function checkRedis(): Promise<{ ok: boolean; ms: number | null }> 
 export function recordHealthSample(dbOk: boolean, redisOk: boolean, apiOk = true): void {
   const now = Date.now();
   samples.push({ t: now, db: dbOk, redis: redisOk, api: apiOk });
-  while (samples.length > 0 && samples[0].t < now - WINDOW_MS) {
+  while (samples.length > 0) {
+    const oldest = samples[0];
+    if (!oldest || oldest.t >= now - WINDOW_MS) break;
     samples.shift();
   }
 }
