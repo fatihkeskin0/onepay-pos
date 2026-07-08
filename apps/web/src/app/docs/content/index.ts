@@ -1,3 +1,4 @@
 import { enContent } from "./en";
+import { resolveDocsContent } from "../resolve-urls";
 
-export const docsContent = enContent;
+export const docsContent = resolveDocsContent(enContent);

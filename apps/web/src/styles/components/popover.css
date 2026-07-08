@@ -9,10 +9,28 @@
   padding: var(--space-3);
 }
 
+.popover--portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: calc(var(--z-popover) + 20);
+}
+
 .popover--start { left: 0; }
 .popover--end { right: 0; left: auto; }
+
+.popover--portal.popover--start,
+.popover--portal.popover--end {
+  right: auto;
+}
 
 .popover-anchor {
   position: relative;
   display: inline-block;
+  width: max-content;
+}
+
+.popover-anchor__trigger {
+  display: inline-flex;
+  align-items: stretch;
 }

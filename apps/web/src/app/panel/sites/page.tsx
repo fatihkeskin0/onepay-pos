@@ -5,6 +5,8 @@ import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { SiteLogoUpload, uploadPendingSiteLogo } from "@/components/admin/SiteLogoUpload";
+import { Icon } from "@/components/ui/Icon";
+import { Badge } from "@/components/ui/Badge";
 
 interface Site {
   id: number;
@@ -41,6 +43,58 @@ const emptyForm = (): SiteForm => ({
   brand_logo_url: "",
   callback_url_deposit: "",
 });
+
+function siteInitial(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+function maskApiKey(key: string): string {
+  if (key.length <= 8) return "••••••••••••";
+  const visibleStart = key.slice(0, 6);
+  const visibleEnd = key.slice(-4);
+  return `${visibleStart}${"•".repeat(10)}${visibleEnd}`;
+}
+
+interface ApiKeyCellProps {
+  apiKey: string;
+  revealed: boolean;
+  onToggle: () => void;
+  onCopy: () => void;
+}
+
+function ApiKeyCell({ apiKey, revealed, onToggle, onCopy }: ApiKeyCellProps) {
+  return (
+    <div className="sites-key">
+      <div className={`sites-key-code${revealed ? " is-revealed" : ""}`}>
+        <code>{revealed ? apiKey : maskApiKey(apiKey)}</code>
+      </div>
+      <div className="sites-key-actions">
+        <button
+          type="button"
+          className="sites-icon-btn"
+          onClick={onToggle}
+          aria-label={revealed ? "API key gizle" : "API key göster"}
+          title={revealed ? "Gizle" : "Göster"}
+        >
+          <Icon name={revealed ? "eye-off" : "eye"} size={14} />
+        </button>
+        <button
+          type="button"
+          className="sites-icon-btn sites-icon-btn--copy"
+          onClick={onCopy}
+          aria-label="API key kopyala"
+          title="Kopyala"
+        >
+          <Icon name="copy" size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function SitesPage() {
   const [items, setItems] = useState<Site[]>([]);
@@ -152,54 +206,80 @@ export default function SitesPage() {
     setForm: (f: SiteForm) => void,
     options?: { siteId?: number; onPendingFile?: (file: File | null) => void },
   ) => (
-    <>
+    <div className="sites-form">
       <div className="form-group">
-        <label className="form-label">Site Adı</label>
-        <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </div>
-      <div className="form-group">
-        <label className="form-label">Min. Yatırım (₺)</label>
+        <label className="form-label">Site adı</label>
         <input
           className="form-input"
-          type="number"
-          value={form.min_deposit}
-          onChange={(e) => setForm({ ...form, min_deposit: e.target.value })}
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Örn. Acme Casino"
         />
       </div>
-      <div className="form-group">
-        <label className="form-label">Komisyon Oranı (%)</label>
-        <input
-          className="form-input"
-          type="number"
-          min={0}
-          max={100}
-          step={0.01}
-          value={form.dep_commission_rate}
-          onChange={(e) => setForm({ ...form, dep_commission_rate: e.target.value })}
-        />
-      </div>
-      <div className="form-row form-row-2">
+
+      <div className="sites-form-grid">
         <div className="form-group">
-          <label className="form-label">Ana Renk</label>
+          <label className="form-label">Min. yatırım (₺)</label>
           <input
             className="form-input"
-            type="color"
-            value={form.brand_color}
-            onChange={(e) => setForm({ ...form, brand_color: e.target.value })}
+            type="number"
+            value={form.min_deposit}
+            onChange={(e) => setForm({ ...form, min_deposit: e.target.value })}
           />
         </div>
         <div className="form-group">
-          <label className="form-label">Arka Plan</label>
+          <label className="form-label">Komisyon (%)</label>
           <input
             className="form-input"
-            type="color"
-            value={form.brand_bg_color}
-            onChange={(e) => setForm({ ...form, brand_bg_color: e.target.value })}
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            value={form.dep_commission_rate}
+            onChange={(e) => setForm({ ...form, dep_commission_rate: e.target.value })}
           />
         </div>
       </div>
+
+      <div className="sites-form-divider" />
+
+      <div className="sites-form-grid">
+        <div className="form-group">
+          <label className="form-label">Ana renk</label>
+          <div className="sites-color-field">
+            <input
+              type="color"
+              value={form.brand_color}
+              onChange={(e) => setForm({ ...form, brand_color: e.target.value })}
+              aria-label="Ana renk"
+            />
+            <input
+              className="form-input"
+              value={form.brand_color}
+              onChange={(e) => setForm({ ...form, brand_color: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Arka plan</label>
+          <div className="sites-color-field">
+            <input
+              type="color"
+              value={form.brand_bg_color}
+              onChange={(e) => setForm({ ...form, brand_bg_color: e.target.value })}
+              aria-label="Arka plan rengi"
+            />
+            <input
+              className="form-input"
+              value={form.brand_bg_color}
+              onChange={(e) => setForm({ ...form, brand_bg_color: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="form-group">
-        <label className="form-label">Ödeme Sayfası Teması</label>
+        <label className="form-label">Ödeme sayfası teması</label>
         <select
           className="form-input"
           value={form.brand_theme}
@@ -211,119 +291,161 @@ export default function SitesPage() {
           <option value="dark">Koyu</option>
         </select>
       </div>
+
       <SiteLogoUpload
         siteId={options?.siteId}
         value={form.brand_logo_url}
         onChange={(url) => setForm({ ...form, brand_logo_url: url })}
         onPendingFile={options?.onPendingFile}
       />
+
+      <div className="sites-form-divider" />
+
       <div className="form-group">
-        <label className="form-label">Yatırım Callback URL</label>
+        <label className="form-label">Callback URL</label>
         <input
           className="form-input"
           value={form.callback_url_deposit}
           onChange={(e) => setForm({ ...form, callback_url_deposit: e.target.value })}
+          placeholder="https://..."
         />
       </div>
-    </>
+    </div>
+  );
+
+  const modalFooter = (onCancel: () => void, onSubmit: () => void, submitLabel: string) => (
+    <div className="sites-modal-footer">
+      <button type="button" className="btn btn-ghost" onClick={onCancel}>
+        İptal
+      </button>
+      <button type="button" className="btn btn-primary" onClick={onSubmit}>
+        {submitLabel}
+      </button>
+    </div>
   );
 
   return (
-    <>
+    <div className="sites-page">
       <div className="page-header">
         <div>
           <div className="page-title">Siteler</div>
-          <div className="page-sub">Entegratör site yönetimi</div>
+          <div className="page-sub">Entegratör site yönetimi ve API erişimi</div>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setAddOpen(true)}>
-          + Site Ekle
+          <Icon name="plus" size={16} />
+          Site Ekle
         </button>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Ad</th>
-              <th>API Key</th>
-              <th>Min Yatırım</th>
-              <th>Komisyon</th>
-              <th>Durum</th>
-              <th>İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((s) => (
-              <tr key={s.id}>
-                <td>{s.name}</td>
-                <td className="cell-mono">
-                  {revealedKeys[s.id] ? s.apiKey : `${s.apiKey.slice(0, 8)}...`}
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost ml-1"
-                    onClick={() => setRevealedKeys({ ...revealedKeys, [s.id]: !revealedKeys[s.id] })}
-                  >
-                    {revealedKeys[s.id] ? "Gizle" : "Göster"}
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => copyKey(s.apiKey)}>
-                    Kopyala
-                  </button>
-                </td>
-                <td>{s.minDeposit} TL</td>
-                <td>%{Number(s.depCommissionRate).toLocaleString("tr-TR")}</td>
-                <td>{s.isActive ? "Aktif" : "Pasif"}</td>
-                <td className="table-actions">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(s)}>
-                    Düzenle
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => toggleSite(s.id)}>
-                    {s.isActive ? "Pasif" : "Aktif"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="sites-card">
+        {items.length === 0 ? (
+          <p className="sites-empty">Henüz site eklenmemiş.</p>
+        ) : (
+          <div className="sites-table-wrap">
+            <table className="sites-table">
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>API Key</th>
+                  <th>Min. Yatırım</th>
+                  <th>Komisyon</th>
+                  <th>Durum</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <div className="sites-site-cell">
+                        <span
+                          className="sites-site-avatar"
+                          style={{ background: s.brandColor || "var(--accent)" }}
+                        >
+                          {siteInitial(s.name)}
+                        </span>
+                        <div>
+                          <div className="sites-site-name">{s.name}</div>
+                          <div className="sites-site-id">ID {s.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="sites-key-cell">
+                      <ApiKeyCell
+                        apiKey={s.apiKey}
+                        revealed={Boolean(revealedKeys[s.id])}
+                        onToggle={() =>
+                          setRevealedKeys((prev) => ({ ...prev, [s.id]: !prev[s.id] }))
+                        }
+                        onCopy={() => copyKey(s.apiKey)}
+                      />
+                    </td>
+                    <td className="sites-metric">
+                      <strong>{Number(s.minDeposit).toLocaleString("tr-TR")}</strong>
+                      <span>₺</span>
+                    </td>
+                    <td className="sites-metric">
+                      <strong>{Number(s.depCommissionRate).toLocaleString("tr-TR")}</strong>
+                      <span>%</span>
+                    </td>
+                    <td>
+                      <Badge variant={s.isActive ? "green" : "gray"}>
+                        {s.isActive ? "Aktif" : "Pasif"}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="sites-actions">
+                        <button
+                          type="button"
+                          className="sites-icon-btn sites-icon-btn--edit"
+                          onClick={() => openEdit(s)}
+                          aria-label="Düzenle"
+                          title="Düzenle"
+                        >
+                          <Icon name="edit" size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className={`sites-icon-btn ${s.isActive ? "sites-icon-btn--off" : "sites-icon-btn--on"}`}
+                          onClick={() => toggleSite(s.id)}
+                          aria-label={s.isActive ? "Pasif yap" : "Aktif yap"}
+                          title={s.isActive ? "Pasif yap" : "Aktif yap"}
+                        >
+                          <Icon name="power" size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <Modal
         open={addOpen}
-        title="Yeni Site Ekle"
+        title="Yeni site"
+        subtitle="Temel bilgiler ve marka ayarları"
         onClose={() => setAddOpen(false)}
-        wide
-        footer={
-          <>
-            <button type="button" className="btn btn-ghost" onClick={() => setAddOpen(false)}>
-              İptal
-            </button>
-            <button type="button" className="btn btn-primary" onClick={submitAdd}>
-              Ekle
-            </button>
-          </>
-        }
+        className="modal--minimal"
+        overlayClassName="modal-overlay--minimal"
+        footer={modalFooter(() => setAddOpen(false), submitAdd, "Ekle")}
       >
         {renderSiteForm(addForm, setAddForm, { onPendingFile: setAddLogoFile })}
       </Modal>
 
       <Modal
         open={editTarget !== null}
-        title={editTarget ? `Site Düzenle: ${editTarget.name}` : ""}
+        title={editTarget ? editTarget.name : "Site"}
+        subtitle="Site ayarlarını güncelle"
         onClose={() => setEditTarget(null)}
-        wide
-        footer={
-          <>
-            <button type="button" className="btn btn-ghost" onClick={() => setEditTarget(null)}>
-              İptal
-            </button>
-            <button type="button" className="btn btn-primary" onClick={submitEdit}>
-              Kaydet
-            </button>
-          </>
-        }
+        className="modal--minimal"
+        overlayClassName="modal-overlay--minimal"
+        footer={modalFooter(() => setEditTarget(null), submitEdit, "Kaydet")}
       >
-        {editTarget
-          ? renderSiteForm(editForm, setEditForm, { siteId: editTarget.id })
-          : null}
+        {editTarget ? renderSiteForm(editForm, setEditForm, { siteId: editTarget.id }) : null}
       </Modal>
-    </>
+    </div>
   );
 }

@@ -4,10 +4,10 @@ import { LandingShell } from "@/components/landing/LandingShell";
 import { TelegramSupportCard } from "@/components/landing/TelegramSupportCard";
 
 const TRUST_ITEMS = [
-  { icon: "lock" as const, label: "256-bit SSL", desc: "Tüm veri trafiği şifrelenir" },
-  { icon: "shield" as const, label: "3D Secure", desc: "Banka onaylı kart doğrulama" },
-  { icon: "card" as const, label: "Kredi & Banka Kartı", desc: "Visa, Mastercard ve Troy" },
-  { icon: "success" as const, label: "Anlık Sonuç", desc: "Onay ve red bildirimi saniyeler içinde" },
+  { icon: "lock" as const, label: "256-bit SSL", desc: "Tüm veri trafiği şifrelenir", tone: "blue" },
+  { icon: "shield" as const, label: "3D Secure", desc: "Banka onaylı kart doğrulama", tone: "indigo" },
+  { icon: "card" as const, label: "Kredi & Banka Kartı", desc: "Visa, Mastercard ve Troy", tone: "cyan" },
+  { icon: "success" as const, label: "Anlık Sonuç", desc: "Onay ve red bildirimi saniyeler içinde", tone: "sky" },
 ];
 
 const FEATURES = [
@@ -15,28 +15,31 @@ const FEATURES = [
     icon: "card" as const,
     title: "Tek tıkla ödeme sayfası",
     desc: "Müşterinize özel güvenli link gönderin. Kart bilgileri yalnızca şifreli kanallardan iletilir.",
+    tone: "blue",
   },
   {
     icon: "shield" as const,
     title: "Uçtan uca koruma",
     desc: "3D Secure, SSL ve PCI uyumlu altyapı ile kart verisi üçüncü taraflarla paylaşılmaz.",
+    tone: "indigo",
   },
   {
     icon: "chart" as const,
     title: "Tüm ödemeler tek panelde",
     desc: "Günlük hacim, durum ve raporları tek ekrandan takip edin. Sade, hızlı operasyon.",
+    tone: "violet",
   },
 ];
 
 const STEPS = [
-  { num: "01", title: "Link oluşturun", desc: "Tutar ve müşteri bilgisiyle saniyeler içinde ödeme linki üretin." },
-  { num: "02", title: "Müşteri öder", desc: "Kart sahibi 3D Secure ile doğrulama yapar; işlem şifreli bağlantı üzerinden tamamlanır." },
-  { num: "03", title: "Sonucu alın", desc: "Onay veya red anında panelinize düşer; ekstra manuel kontrol gerekmez." },
+  { num: "01", title: "Link oluşturun", desc: "Tutar ve müşteri bilgisiyle saniyeler içinde ödeme linki üretin.", tone: "blue" },
+  { num: "02", title: "Müşteri öder", desc: "Kart sahibi 3D Secure ile doğrulama yapar; işlem şifreli bağlantı üzerinden tamamlanır.", tone: "indigo" },
+  { num: "03", title: "Sonucu alın", desc: "Onay veya red anında panelinize düşer; ekstra manuel kontrol gerekmez.", tone: "cyan" },
 ];
 
 export default function LandingPage() {
   return (
-    <LandingShell active="home">
+    <LandingShell>
       <main className="landing-main">
         <section className="landing-hero">
           <div className="landing-hero-copy">
@@ -85,7 +88,7 @@ export default function LandingPage() {
 
         <section className="landing-trust" aria-label="Güvenlik özellikleri">
           {TRUST_ITEMS.map((item) => (
-            <div key={item.label} className="landing-trust-item">
+            <div key={item.label} className={`landing-trust-item landing-gradient-card landing-gradient-card--${item.tone}`}>
               <span className="landing-trust-icon">
                 <Icon name={item.icon} size={18} />
               </span>
@@ -99,7 +102,7 @@ export default function LandingPage() {
 
         <section className="landing-features">
           {FEATURES.map((f) => (
-            <article key={f.title} className="landing-feature">
+            <article key={f.title} className={`landing-feature landing-gradient-card landing-gradient-card--${f.tone}`}>
               <span className="landing-feature-icon">
                 <Icon name={f.icon} size={20} />
               </span>
@@ -113,7 +116,7 @@ export default function LandingPage() {
           <h2 className="landing-steps-title">Nasıl çalışır?</h2>
           <div className="landing-steps-grid">
             {STEPS.map((step) => (
-              <article key={step.num} className="landing-step">
+              <article key={step.num} className={`landing-step landing-gradient-card landing-gradient-card--${step.tone}`}>
                 <span className="landing-step-num">{step.num}</span>
                 <h3>{step.title}</h3>
                 <p>{step.desc}</p>
@@ -136,12 +139,12 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="landing-support-preview">
-          <div className="landing-support-preview-copy">
+        <section className="landing-support-section">
+          <div className="landing-support-section-head">
             <h2>Özel Destek Altyapısı</h2>
             <p>Kurumsal düzeyde iletişim kanalları aracılığıyla 7/24 özel yardım sağlıyoruz.</p>
           </div>
-          <TelegramSupportCard />
+          <TelegramSupportCard variant="banner" />
         </section>
       </main>
     </LandingShell>

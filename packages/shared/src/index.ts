@@ -115,6 +115,7 @@ export const LS_KEYS = {
   theme: "rf_theme",
   seenAnn: "rf_seen_ann",
   sound: "rf_sound",
+  dashDateRange: "rf_dash_date_range",
 } as const;
 
 export type PspProviderName = "paytr" | "stripe" | "sumup";

@@ -7,6 +7,7 @@
 @import './components/table.css';
 @import './components/badge.css';
 @import './components/tabs.css';
+@import './components/popover.css';
 @import './components/modal.css';
 @import './components/toast.css';
 @import './components/site-logo-upload.css';
@@ -18,4 +19,7 @@
 @import './pages/pay.css';
 @import './pages/docs.css';
 @import './pages/reconciliation.css';
+@import './pages/applications.css';
+@import './pages/sites.css';
+@import './pages/users.css';
 @import './pages/error.css';

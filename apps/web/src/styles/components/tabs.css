@@ -97,3 +97,30 @@
 
 .toolbar-preset:hover { border-color: var(--accent); color: var(--accent); }
 .toolbar-preset.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+.deposit-user-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--space-3);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.deposit-user-filter code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}

@@ -38,7 +38,7 @@
   --shell-active-border: #BFDBFE;
 
   /* Typography */
-  --font-sans: var(--font-inter, 'Inter'), system-ui, sans-serif;
+  --font-sans: var(--font-geist-sans, 'Geist Sans'), system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --text-xs: 11px;
   --text-sm: 13px;

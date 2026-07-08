@@ -89,7 +89,6 @@ export function resolvePublicLogoPath(storedUrl: string | null | undefined): str
     return storedUrl;
   }
   if (storedUrl.startsWith("/uploads/")) return storedUrl;
-  if (storedUrl.startsWith("/backend/uploads/")) return storedUrl.replace(/^\/backend/, "");
   return storedUrl;
 }
 

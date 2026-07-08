@@ -1,14 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { format, parseISO } from "date-fns";
+import { tr } from "date-fns/locale";
 import { API } from "@/lib/api";
 import { PAGE_HREF } from "@/lib/nav";
 import { panelHref } from "@/lib/panel-routes";
 import { useClientSession } from "@/hooks/useClientSession";
-import { useClientTodayLabel } from "@/hooks/useClientTodayLabel";
+import { useClientClock } from "@/hooks/useClientClock";
 import { Icon } from "@/components/ui/Icon";
 import { Badge } from "@/components/ui/Badge";
+import { HourlyTrendChart, WeeklyTrendChart } from "@/components/pages/DashboardCharts";
+import {
+  DashboardDateFilter,
+  formatDashboardRangeLabel,
+  todayRange,
+  type DashboardDateRange,
+} from "@/components/pages/DashboardDateFilter";
+import { loadDashboardDateRange, saveDashboardDateRange } from "@/lib/dashboard-date-range";
 
 interface TrendDay {
   date: string;
@@ -33,6 +43,9 @@ interface HourSlot {
 }
 
 interface DashboardData {
+  selected_from?: string;
+  selected_to?: string;
+  is_today?: boolean;
   pending_deposits: number;
   approved_today: number;
   amount_today: string | number;
@@ -41,6 +54,20 @@ interface DashboardData {
   online_agents?: number;
   trend: TrendDay[];
   recent: RecentDeposit[];
+}
+
+interface ServiceHealth {
+  ok: boolean;
+  ms: number | null;
+  uptime_pct: number;
+}
+
+interface SystemStatus {
+  db: ServiceHealth;
+  redis: ServiceHealth;
+  api: ServiceHealth;
+  window_min: number;
+  checked_at: string;
 }
 
 const STATUS_BADGE: Record<string, "pending" | "approved" | "rejected" | "cancelled" | "gray"> = {
@@ -63,34 +90,73 @@ function formatMoney(val: string | number | null | undefined) {
 }
 
 function formatShortDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+  return format(parseISO(iso), "d MMM", { locale: tr });
 }
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
-type StatIcon = "pending" | "check" | "card" | "chart" | "x" | "online";
+type StatTone = "amber" | "green" | "blue" | "purple" | "red" | "teal";
+
+interface MetricCard {
+  key: string;
+  label: string;
+  value: string;
+  hint?: string;
+  tone: StatTone;
+  icon: string;
+  href?: string;
+}
+
+function statusTone(status: string): string {
+  return STATUS_BADGE[status] ?? "gray";
+}
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [hours, setHours] = useState<HourSlot[]>([]);
+  const [newApplications, setNewApplications] = useState(0);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [dateRange, setDateRange] = useState<DashboardDateRange>(todayRange);
+  const [rangeReady, setRangeReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const { ready, username, isAdmin } = useClientSession();
-  const todayLabel = useClientTodayLabel();
+  const { combinedLabel: clockLabel } = useClientClock();
 
   useEffect(() => {
-    if (!ready) return;
+    const stored = loadDashboardDateRange();
+    if (stored) setDateRange(stored);
+    setRangeReady(true);
+  }, []);
+
+  const handleDateRangeChange = (range: DashboardDateRange) => {
+    setDateRange(range);
+    saveDashboardDateRange(range);
+  };
+
+  useEffect(() => {
+    if (!ready || !rangeReady) return;
+    setLoading(true);
     const load = async () => {
       try {
         const endpoint = isAdmin ? "/admin/dashboard" : "/cashier/stats";
-        const [dash, hourly] = await Promise.all([
-          API.get<DashboardData>(endpoint),
-          API.get<{ hours: HourSlot[] }>("/cashier/hourly_stats").catch(() => ({ hours: [] })),
+        const dateQuery = `from=${dateRange.from}&to=${dateRange.to}`;
+        const [dash, hourly, badges, status] = await Promise.all([
+          API.get<DashboardData>(`${endpoint}?${dateQuery}`),
+          API.get<{ hours: HourSlot[]; date: string }>(`/cashier/hourly_stats?${dateQuery}`).catch(() => ({
+            hours: [],
+            date: dateRange.to,
+          })),
+          isAdmin
+            ? API.get<{ applications: number }>("/admin/badges").catch(() => ({ applications: 0 }))
+            : Promise.resolve({ applications: 0 }),
+          API.get<SystemStatus>("/cashier/system_status").catch(() => null),
         ]);
         setData(dash);
         setHours(hourly.hours ?? []);
+        setNewApplications(badges.applications ?? 0);
+        setSystemStatus(status);
       } catch {
         /* ignore */
       } finally {
@@ -100,80 +166,99 @@ export default function DashboardPage() {
     load();
     const id = setInterval(load, 30000);
     return () => clearInterval(id);
-  }, [isAdmin, ready]);
+  }, [isAdmin, ready, rangeReady, dateRange]);
 
-  const maxTrend = useMemo(() => {
-    if (!data?.trend.length) return 1;
-    return Math.max(...data.trend.map((t) => t.amount), 1);
-  }, [data?.trend]);
+  const trend = useMemo(() => data?.trend ?? [], [data?.trend]);
+  const trendChartData = useMemo(
+    () =>
+      trend.map((day) => ({
+        label: formatShortDate(day.date),
+        amount: Number(day.amount),
+        count: day.count,
+      })),
+    [trend],
+  );
+  const hourChartData = useMemo(
+    () =>
+      hours.map((h) => ({
+        label: `${String(h.hour).padStart(2, "0")}:00`,
+        amount: Number(h.amount),
+        count: h.count,
+      })),
+    [hours],
+  );
+  const trendTotal = useMemo(() => trend.reduce((sum, d) => sum + Number(d.amount), 0), [trend]);
+  const trendCount = useMemo(() => trend.reduce((sum, d) => sum + d.count, 0), [trend]);
 
-  const maxHour = useMemo(() => {
-    if (!hours.length) return 1;
-    return Math.max(...hours.map((h) => h.amount), 1);
+  const approvedToday = data?.approved_today ?? 0;
+  const amountToday = Number(data?.amount_today ?? 0);
+  const avgTicket = approvedToday > 0 ? amountToday / approvedToday : 0;
+  const peakHour = useMemo(() => {
+    if (!hours.length) return null;
+    return hours.reduce((best, h) => (h.amount > best.amount ? h : best), hours[0] ?? null);
   }, [hours]);
 
   const displayName = ready ? username || "Kullanıcı" : "Kullanıcı";
+  const pending = data?.pending_deposits ?? 0;
+  const activeFrom = data?.selected_from ?? dateRange.from;
+  const activeTo = data?.selected_to ?? dateRange.to;
+  const isTodaySelected = data?.is_today ?? (activeFrom === activeTo && activeFrom === todayRange().from);
+  const isSingleDay = activeFrom === activeTo;
+  const statsScopeLabel = isTodaySelected
+    ? "Onay, ciro, komisyon ve red — bugün"
+    : isSingleDay
+      ? `Onay, ciro, komisyon ve red — ${formatDashboardRangeLabel(activeFrom, activeTo)}`
+      : `Onay, ciro, komisyon ve red — ${formatDashboardRangeLabel(activeFrom, activeTo)}`;
 
-  const statCards: {
-    key: string;
-    label: string;
-    value: string | number;
-    suffix: string;
-    icon: StatIcon;
-    tone: string;
-    href?: string;
-  }[] = [
+  const metrics: MetricCard[] = [
     {
       key: "pending",
       label: "Bekleyen",
-      value: data?.pending_deposits ?? 0,
-      suffix: "",
+      value: loading ? "—" : String(pending),
+      hint: "Anlık kuyruk",
+      tone: "amber",
       icon: "pending",
-      tone: "dash-stat--amber",
       href: PAGE_HREF["adm-dep"] ?? panelHref("deposit"),
     },
     {
       key: "approved",
-      label: "Bugün Onay",
-      value: data?.approved_today ?? 0,
-      suffix: "",
+      label: "Onay",
+      value: loading ? "—" : String(approvedToday),
+      hint: avgTicket > 0 ? `Ort. ${formatMoney(avgTicket)} ₺` : undefined,
+      tone: "green",
       icon: "check",
-      tone: "dash-stat--green",
     },
     {
       key: "amount",
-      label: "Bugün Ciro",
-      value: formatMoney(data?.amount_today),
-      suffix: " ₺",
+      label: "Ciro",
+      value: loading ? "—" : `${formatMoney(data?.amount_today)} ₺`,
+      tone: "blue",
       icon: "card",
-      tone: "dash-stat--blue",
     },
     {
       key: "commission",
-      label: "Bugün Komisyon",
-      value: formatMoney(data?.commission_today),
-      suffix: " ₺",
+      label: "Komisyon",
+      value: loading ? "—" : `${formatMoney(data?.commission_today)} ₺`,
+      tone: "purple",
       icon: "chart",
-      tone: "dash-stat--purple",
       href: isAdmin ? PAGE_HREF["adm-site-mutabakat"] : undefined,
     },
     {
       key: "rejected",
-      label: "Bugün Red",
-      value: data?.rejected_today ?? 0,
-      suffix: "",
+      label: "Red",
+      value: loading ? "—" : String(data?.rejected_today ?? 0),
+      tone: "red",
       icon: "x",
-      tone: "dash-stat--red",
     },
     ...(isAdmin
       ? [
           {
             key: "online",
-            label: "Online Agent",
-            value: data?.online_agents ?? 0,
-            suffix: "",
-            icon: "online" as StatIcon,
-            tone: "dash-stat--teal",
+            label: "Agent",
+            value: loading ? "—" : String(data?.online_agents ?? 0),
+            hint: "Anlık · 5 dk",
+            tone: "teal" as StatTone,
+            icon: "online",
             href: PAGE_HREF["adm-monitor"],
           },
         ]
@@ -181,153 +266,244 @@ export default function DashboardPage() {
   ];
 
   const quickLinks = [
-    { href: PAGE_HREF["adm-dep"], label: "Yatırımlar", desc: "Bekleyen ve onaylı", icon: "card" as StatIcon },
-    { href: PAGE_HREF["adm-siteler"], label: "Siteler", desc: "Komisyon ve API", icon: "globe" as StatIcon },
-    { href: PAGE_HREF["adm-site-mutabakat"], label: "Site Mutabakatı", desc: "Özet ve XLSX döküm", icon: "receipt" as StatIcon },
-    { href: PAGE_HREF["adm-pos"], label: "POS Ayarları", desc: "PayTR, Stripe, SumUp", icon: "bank" as StatIcon },
-    { href: PAGE_HREF["adm-raporlar"], label: "Raporlar", desc: "Durum özeti", icon: "report" as StatIcon },
+    { href: PAGE_HREF["adm-basvurular"], label: "Başvurular", icon: "users" },
+    { href: PAGE_HREF["adm-dep"], label: "Yatırımlar", icon: "card" },
+    { href: PAGE_HREF["adm-siteler"], label: "Siteler", icon: "globe" },
+    { href: PAGE_HREF["adm-site-mutabakat"], label: "Mutabakat", icon: "receipt" },
+    { href: PAGE_HREF["adm-pos"], label: "POS", icon: "bank" },
+    { href: PAGE_HREF["adm-raporlar"], label: "Raporlar", icon: "report" },
+    { href: PAGE_HREF["adm-guvenlik"] ?? panelHref("security"), label: "Güvenlik", icon: "shield" },
   ];
+
+  const alerts = [
+    pending > 0 && !loading
+      ? {
+          key: "pending",
+          href: PAGE_HREF["adm-dep"] ?? panelHref("deposit"),
+          tone: "warn" as const,
+          icon: "pending",
+          text: `${pending} bekleyen yatırım`,
+        }
+      : null,
+    isAdmin && newApplications > 0 && !loading
+      ? {
+          key: "apps",
+          href: PAGE_HREF["adm-basvurular"] ?? panelHref("applications"),
+          tone: "info" as const,
+          icon: "users",
+          text: `${newApplications} yeni başvuru`,
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    href: string;
+    tone: "warn" | "info";
+    icon: string;
+    text: string;
+  }>;
 
   return (
     <div className="dash">
-      <header className="dash-hero">
-        <div>
-          <p className="dash-greeting">Merhaba, {displayName}</p>
-          <h1 className="dash-title">Genel Bakış</h1>
-          {todayLabel ? <p className="dash-date">{todayLabel}</p> : <p className="dash-date">&nbsp;</p>}
+      <header className="dash-topbar">
+        <div className="dash-topbar-main">
+          <div>
+            <p className="dash-topbar-eyebrow">{clockLabel || "—"}</p>
+            <h1 className="dash-topbar-title">
+              Merhaba, <span>{displayName}</span>
+            </h1>
+          </div>
         </div>
-        <div className="dash-live">
-          <span className="dash-live-dot" />
-          Canlı · 30 sn yenileme
+        <div className="dash-topbar-meta">
+          <div className="dash-health" title={`Son ${systemStatus?.window_min ?? 30} dk — uptime & latency`}>
+            <div className={`dash-health-item${systemStatus?.db.ok === false ? " dash-health-item--down" : ""}`}>
+              <span className="dash-health-dot" />
+              <span className="dash-health-label">DB</span>
+              <span className="dash-health-uptime">
+                uptime {systemStatus ? `${systemStatus.db.uptime_pct}%` : "—"}
+              </span>
+              <span className="dash-health-ms">
+                {systemStatus?.db.ms != null ? `${systemStatus.db.ms}ms` : "—"}
+              </span>
+            </div>
+            <div className={`dash-health-item${systemStatus?.redis.ok === false ? " dash-health-item--down" : ""}`}>
+              <span className="dash-health-dot" />
+              <span className="dash-health-label">Redis</span>
+              <span className="dash-health-uptime">
+                uptime {systemStatus ? `${systemStatus.redis.uptime_pct}%` : "—"}
+              </span>
+              <span className="dash-health-ms">
+                {systemStatus?.redis.ms != null ? `${systemStatus.redis.ms}ms` : "—"}
+              </span>
+            </div>
+            <div className={`dash-health-item${systemStatus?.api.ok === false ? " dash-health-item--down" : ""}`}>
+              <span className="dash-health-dot" />
+              <span className="dash-health-label">API</span>
+              <span className="dash-health-uptime">
+                uptime {systemStatus ? `${systemStatus.api.uptime_pct}%` : "—"}
+              </span>
+              <span className="dash-health-ms">
+                {systemStatus?.api.ms != null ? `${systemStatus.api.ms}ms` : "—"}
+              </span>
+            </div>
+          </div>
         </div>
       </header>
 
-      <div className="dash-stat-grid">
-        {statCards.map((card) => {
-          const inner = (
+      {alerts.length > 0 ? (
+        <div className="dash-alerts">
+          {alerts.map((alert) => (
+            <Link
+              key={alert.key}
+              href={alert.href}
+              className={`dash-alert dash-alert--${alert.tone}`}
+            >
+              <Icon name={alert.icon} size={14} />
+              <span>{alert.text}</span>
+              <span className="dash-alert-arrow">→</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="dash-metrics-wrap">
+        <div className="dash-metrics-toolbar">
+          <DashboardDateFilter value={dateRange} onChange={handleDateRangeChange} />
+          <p className="dash-metrics-scope">{statsScopeLabel}</p>
+        </div>
+
+        <div className="dash-metrics">
+        {metrics.map((card) => {
+          const body = (
             <>
-              <div className={`dash-stat-icon ${card.tone}`}>
-                <Icon name={card.icon} size={22} />
-              </div>
-              <div className="dash-stat-body">
-                <div className="dash-stat-label">{card.label}</div>
-                <div className="dash-stat-value">
-                  {loading ? "—" : `${card.value}${card.suffix}`}
-                </div>
-              </div>
+              <span className={`dash-metric-icon dash-metric-icon--${card.tone}`}>
+                <Icon name={card.icon} size={15} />
+              </span>
+              <span className="dash-metric-label">{card.label}</span>
+              <span className="dash-metric-value">{card.value}</span>
+              {card.hint ? <span className="dash-metric-hint">{card.hint}</span> : null}
             </>
           );
           return card.href ? (
-            <Link key={card.key} href={card.href} className={`dash-stat ${card.tone}`}>
-              {inner}
+            <Link key={card.key} href={card.href} className={`dash-metric dash-metric--${card.tone}`}>
+              {body}
             </Link>
           ) : (
-            <div key={card.key} className={`dash-stat ${card.tone}`}>
-              {inner}
+            <div key={card.key} className={`dash-metric dash-metric--${card.tone}`}>
+              {body}
             </div>
           );
         })}
+        </div>
       </div>
 
-      <div className="dash-grid">
-        <section className="dash-panel dash-panel--wide">
-          <div className="dash-panel-head">
-            <h2>Son 7 Gün — Onaylı Yatırım</h2>
-            <span className="dash-panel-meta">Tutar (₺)</span>
-          </div>
-          <div className="dash-bars">
-            {(data?.trend ?? []).map((day) => {
-              const pct = Math.round((day.amount / maxTrend) * 100);
-              const label = formatShortDate(day.date);
-              const barStyle = { "--bar-fill": `${Math.max(pct, day.amount > 0 ? 4 : 0)}%` } as CSSProperties;
-              return (
-                <div key={day.date} className="dash-bar-col" title={`${label}: ${formatMoney(day.amount)} ₺ (${day.count} işlem)`}>
-                  <div className="dash-bar-track">
-                    <div className="dash-bar-fill" style={barStyle} />
-                  </div>
-                  <span className="dash-bar-label">{label.split(" ")[0]}</span>
-                  <span className="dash-bar-count">{day.count}</span>
-                </div>
-              );
-            })}
-            {!loading && (!data?.trend.length || data.trend.every((t) => t.amount === 0)) && (
-              <p className="dash-empty">Bu dönemde onaylı yatırım yok</p>
+      <div className="dash-analytics">
+        <section className="dash-panel">
+          <header className="dash-panel-head">
+            <div>
+              <h2>Trend</h2>
+              <p>
+                {isSingleDay
+                  ? formatDashboardRangeLabel(activeFrom, activeTo)
+                  : `${formatShortDate(activeFrom)} – ${formatShortDate(activeTo)}`}
+              </p>
+            </div>
+            <div className="dash-panel-stat">
+              <strong>{loading ? "—" : `${formatMoney(trendTotal)} ₺`}</strong>
+              <span>{loading ? "" : `${trendCount} işlem`}</span>
+            </div>
+          </header>
+          <div className="dash-chart-panel">
+            {loading ? (
+              <div className="dash-skeleton dash-skeleton--chart" />
+            ) : (
+              <WeeklyTrendChart data={trendChartData} />
             )}
           </div>
         </section>
 
         <section className="dash-panel">
-          <div className="dash-panel-head">
-            <h2>Son 24 Saat</h2>
-            <span className="dash-panel-meta">Saatlik</span>
-          </div>
-          <div className="dash-sparkline">
-            {hours.map((h) => {
-              const pct = Math.round((h.amount / maxHour) * 100);
-              const sparkStyle = { "--spark-fill": `${Math.max(pct, h.amount > 0 ? 8 : 2)}%` } as CSSProperties;
-              return (
-                <div
-                  key={h.hour}
-                  className="dash-spark-col"
-                  title={`${String(h.hour).padStart(2, "0")}:00 — ${formatMoney(h.amount)} ₺`}
-                >
-                  <div className="dash-spark-bar" style={sparkStyle} />
-                </div>
-              );
-            })}
-          </div>
-          <div className="dash-spark-labels">
-            <span>00</span>
-            <span>06</span>
-            <span>12</span>
-            <span>18</span>
-            <span>23</span>
+          <header className="dash-panel-head">
+            <div>
+              <h2>Saatlik</h2>
+              <p>
+                {isSingleDay
+                  ? isTodaySelected
+                    ? "Bugün saatlik akış"
+                    : `${formatShortDate(activeTo)} saatlik`
+                  : `${formatShortDate(activeTo)} günü saatlik`}
+              </p>
+            </div>
+            {peakHour && !loading ? (
+              <div className="dash-panel-stat">
+                <strong>{String(peakHour.hour).padStart(2, "0")}:00</strong>
+                <span>{formatMoney(peakHour.amount)} ₺</span>
+              </div>
+            ) : null}
+          </header>
+          <div className="dash-chart-panel dash-chart-panel--compact">
+            {loading ? (
+              <div className="dash-skeleton dash-skeleton--hourly" />
+            ) : (
+              <HourlyTrendChart data={hourChartData} />
+            )}
           </div>
         </section>
       </div>
 
-      <div className="dash-grid dash-grid--bottom">
-        <section className="dash-panel dash-panel--wide">
-          <div className="dash-panel-head">
-            <h2>Son İşlemler</h2>
+      <div className="dash-bottom">
+        <section className="dash-panel dash-panel--table">
+          <header className="dash-panel-head">
+            <div>
+              <h2>Son işlemler</h2>
+              <p>Son 8 kayıt</p>
+            </div>
             <Link href={PAGE_HREF["adm-dep"] ?? panelHref("deposit")} className="dash-link">
-              Tümünü gör →
+              Tümü
             </Link>
-          </div>
-          <div className="table-wrap dash-table-wrap">
-            <table>
+          </header>
+
+          <div className="table-wrap dash-table-wrap dash-table-wrap--flush">
+            <table className="dash-table dash-table--recent">
               <thead>
                 <tr>
-                  <th>Referans</th>
+                  <th className="dash-table-status-col" aria-label="Durum" />
+                  <th>Ref</th>
                   <th>Site</th>
                   <th>Kullanıcı</th>
-                  <th>Tutar</th>
+                  <th className="dash-table-num">Tutar</th>
                   <th>Durum</th>
-                  <th>Zaman</th>
+                  <th className="dash-table-num">Saat</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6}>Yükleniyor...</td>
+                    <td colSpan={7} className="table-loading">
+                      Yükleniyor…
+                    </td>
                   </tr>
                 ) : !data?.recent.length ? (
                   <tr>
-                    <td colSpan={6}>Henüz işlem yok</td>
+                    <td colSpan={7} className="table-empty">
+                      Henüz işlem yok
+                    </td>
                   </tr>
                 ) : (
                   data.recent.map((r) => (
-                    <tr key={r.id}>
+                    <tr key={r.id} className={`dash-row dash-row--${statusTone(r.status)}`}>
+                      <td className="dash-table-status-col">
+                        <span className={`dash-status-dot dash-status-dot--${statusTone(r.status)}`} />
+                      </td>
                       <td className="cell-mono">{r.reference}</td>
                       <td>{r.site_name}</td>
-                      <td>{r.user_id}</td>
-                      <td>{formatMoney(r.amount)} ₺</td>
+                      <td className="cell-muted">{r.user_id}</td>
+                      <td className="dash-table-num dash-table-amount">{formatMoney(r.amount)} ₺</td>
                       <td>
                         <Badge variant={STATUS_BADGE[r.status] ?? "gray"}>
                           {STATUS_LABEL[r.status] ?? r.status}
                         </Badge>
                       </td>
-                      <td className="cell-muted">{formatTime(r.created_at)}</td>
+                      <td className="dash-table-num cell-muted">{formatTime(r.created_at)}</td>
                     </tr>
                   ))
                 )}
@@ -336,26 +512,24 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {isAdmin && (
-          <section className="dash-panel">
-            <div className="dash-panel-head">
-              <h2>Hızlı Erişim</h2>
-            </div>
-            <nav className="dash-quick">
+        {isAdmin ? (
+          <section className="dash-panel dash-panel--shortcuts">
+            <header className="dash-panel-head">
+              <div>
+                <h2>Kısayollar</h2>
+                <p>Modüller</p>
+              </div>
+            </header>
+            <nav className="dash-shortcuts">
               {quickLinks.map((item) => (
-                <Link key={item.href} href={item.href ?? "#"} className="dash-quick-item">
-                  <span className="dash-quick-icon">
-                    <Icon name={item.icon} size={20} />
-                  </span>
-                  <span>
-                    <strong>{item.label}</strong>
-                    <small>{item.desc}</small>
-                  </span>
+                <Link key={item.href} href={item.href ?? "#"} className="dash-shortcut">
+                  <Icon name={item.icon} size={15} />
+                  <span>{item.label}</span>
                 </Link>
               ))}
             </nav>
           </section>
-        )}
+        ) : null}
       </div>
     </div>
   );

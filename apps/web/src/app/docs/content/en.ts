@@ -23,8 +23,9 @@ export const enContent: DocsContent = {
     securityBody:
       "The X-Api-Key header is required for create_payment_link. Send it from your backend only; never expose the key in browser code.",
     baseUrlTitle: "Base URL",
-    baseUrlValue: "https://onekart.info/backend/user/",
-    baseUrlNote: "Every endpoint below is an absolute URL under this base. Parameter names are case-sensitive.",
+    baseUrlValue: "{API_PUBLIC_URL}/user/",
+    baseUrlNote:
+      "Merchant API is served on the API host (e.g. https://api.onekart.info), not the marketing site. Every endpoint below is an absolute URL. Parameter names are case-sensitive.",
   },
   endpointsSectionTitle: "API Endpoints",
   endpoints: [
@@ -32,7 +33,7 @@ export const enContent: DocsContent = {
       id: "create-payment-link",
       title: "Create Payment Link",
       method: "POST",
-      path: "https://onekart.info/backend/user/create_payment_link",
+      path: "{API_PUBLIC_URL}/user/create_payment_link",
       description:
         "Generates a single-use payment page link. Redirect the customer to the url field in the response to open the credit card checkout.",
       meta: [
@@ -72,7 +73,7 @@ export const enContent: DocsContent = {
       id: "deposit-status",
       title: "Deposit Status",
       method: "GET",
-      path: "https://onekart.info/backend/user/deposit_status",
+      path: "{API_PUBLIC_URL}/user/deposit_status",
       description:
         "Queries the current status of a deposit. ref and token are deposit credentials created when the customer starts checkout; they are not returned by create_payment_link. For merchant backends, use the deposit callback instead of polling.",
       meta: [

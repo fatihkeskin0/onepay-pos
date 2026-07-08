@@ -25,7 +25,7 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
    - All three web hostnames must be present; missing `app.*` → **“no available server”** or 504 on that host.
 7. Set **required URL env** (do not add `SERVICE_URL_*` — not in compose):
    - `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL`, `API_PUBLIC_URL`
-   - Browser panel/pay calls use same-origin `/backend/*` proxy (no `NEXT_PUBLIC_API_URL` needed). Leave `NEXT_PUBLIC_API_URL` unset unless you explicitly want cross-origin API calls.
+   - Web build uses `API_PUBLIC_URL` as `NEXT_PUBLIC_API_URL` (browser + merchant API calls `https://api.onekart.info`)
    - Payment domain (e.g. `https://odeme.click`) via DNS → same web service + `APP_PAYMENT_URL`
 8. Set secrets: `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, Stripe keys (PayTR optional)
 9. Deploy. API entrypoint runs `prisma migrate deploy` automatically (healthcheck allows ~3 min startup).
@@ -123,14 +123,12 @@ The browser error is usually **not** a CORS config bug. Check:
 
 ```sh
 curl -I https://api.onekart.info/health
-curl -I https://app.onekart.info/backend/health
 ```
 
 | Result | Meaning |
 |--------|---------|
-| `api` → **504**, `backend/health` → **200** | API container is healthy but **`api` subdomain is not routed** in Coolify. Add `https://api.onekart.info` to the **api** service Domains tab (port **80**). Panel login should still work via `/backend` after web redeploy (see compose: empty `NEXT_PUBLIC_API_URL`). |
-| Both **504** | API container down — check Coolify logs, `DATABASE_URL`, `REDIS_URL`, migrations. |
-| `api/health` → **200** but browser CORS | Set `CORS_ORIGIN` on **api** to include `https://app.onekart.info` (comma-separated). |
+| **504** | API container down or **`api` subdomain not routed** in Coolify. Add `https://api.onekart.info` to the **api** service Domains tab (port **80**). Check Coolify logs, `DATABASE_URL`, `REDIS_URL`, migrations. |
+| **200** but browser CORS | Set `CORS_ORIGIN` on **api** to include `https://app.onekart.info`, `https://onekart.info`, `https://odeme.click` (comma-separated). |
 
 `static.cloudflareinsights.com ... ERR_BLOCKED_BY_CLIENT` is an ad blocker — ignore it.
 
@@ -186,9 +184,8 @@ docker compose -f ops/docker/compose.bundled.yaml up --build
 
 ## Architecture notes
 
-- Web proxies `/backend/*` → internal `http://api:80/*` (fallback when build lacks public API URL).
-- Panel/pay browser requests use `/backend/*` on the web domain (internal `http://api:80`). `API_PUBLIC_URL` is for PSP webhooks and external integrations only.
-- Merchants integrate via `/backend/user/*` on the **web** domain.
+- Panel/pay browser requests and merchant integrations use `https://api.onekart.info` (`NEXT_PUBLIC_API_URL` baked at web build from `API_PUBLIC_URL`).
+- Merchant API: `POST https://api.onekart.info/user/create_payment_link` (documented at `/docs`).
 - PSP callbacks hit **api** domain: `POST /psp/{provider}/callback`.
 - Health checks: `GET /api/health` (web), `GET /health` (api — includes Redis status).
 - Rate limiting uses Redis (not DB). Audit/login/chat logs stay in PostgreSQL.

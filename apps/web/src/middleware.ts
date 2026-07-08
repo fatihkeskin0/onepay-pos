@@ -70,12 +70,7 @@ function isExclusivePaymentHost(
 }
 
 function isMarketingContentPath(pathname: string): boolean {
-  return (
-    pathname === "/" ||
-    pathname === "/docs" ||
-    pathname.startsWith("/docs/") ||
-    pathname === "/support"
-  );
+  return pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/");
 }
 
 export function middleware(request: NextRequest) {
@@ -86,11 +81,7 @@ export function middleware(request: NextRequest) {
   const host = requestHost(request);
   const { pathname, search } = request.nextUrl;
 
-  if (
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/backend/") ||
-    pathname.startsWith("/_next/")
-  ) {
+  if (pathname.startsWith("/api/") || pathname.startsWith("/_next/")) {
     return NextResponse.next();
   }
 

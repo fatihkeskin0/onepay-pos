@@ -46,13 +46,13 @@ Landing and API docs: `APP_MARKETING_URL` (e.g. `https://onekart.info`, `/docs`)
 
 ## Payment Flow
 
-1. Site calls `POST /user/create_payment_link` with `X-API-Key`
-2. User opens `/pay/{token}`
-3. Pay page loads `GET /user/pos_methods?token=...`
-4. User confirms amount → `POST /user/create_deposit`
+1. Site calls `POST {API}/user/create_payment_link` with `X-API-Key` (`{API}` = `API_PUBLIC_URL`, e.g. `https://api.onekart.info`)
+2. User opens `/pay/{token}` on the payment domain (`APP_PAYMENT_URL`)
+3. Pay page loads `GET {API}/user/pos_methods?token=...`
+4. User confirms amount → `POST {API}/user/create_deposit`
 5. Embedded checkout (PayTR iframe / Stripe Payment Element) or redirect (SumUp) → PSP webhook → auto approve + commission snapshot
 6. Site receives outbound callback (CheckSum signed)
-7. Pay page polls `GET /user/deposit_status`
+7. Pay page polls `GET {API}/user/deposit_status`
 
 See full integrator reference: http://localhost:3105/docs
 

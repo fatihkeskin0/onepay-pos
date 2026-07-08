@@ -1,162 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
-import { Modal } from "@/components/Modal";
+import { UserProfileModal } from "@/components/admin/UserProfileModal";
+import { Icon } from "@/components/ui/Icon";
+import { Badge } from "@/components/ui/Badge";
 
-interface Wallet {
+interface UserListItem {
   userId: string;
-  balance: string;
+  balance: number;
   currency: string;
-  totalDeposited: string;
-  totalWithdrawn: string;
+  updatedAt: string;
+  depositCount: number;
+  approvedDepositTotal: number;
+  pendingDepositCount: number;
 }
 
-interface Transaction {
-  id: number;
-  type: string;
-  amount: string;
-  createdAt: string;
+function userInitial(userId: string): string {
+  const clean = userId.replace(/[^a-zA-Z0-9]/g, "");
+  return (clean.slice(0, 2) || userId.slice(0, 2) || "?").toUpperCase();
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function UsersPage() {
-  const [items, setItems] = useState<Wallet[]>([]);
+  const [items, setItems] = useState<UserListItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
   const { notify } = useToast();
 
-  const [detailUser, setDetailUser] = useState<string | null>(null);
-  const [detailWallet, setDetailWallet] = useState<Wallet | null>(null);
-  const [detailTxs, setDetailTxs] = useState<Transaction[]>([]);
-
-  const load = async (q?: string) => {
-    setLoading(true);
-    try {
-      const query = q !== undefined ? q : search;
-      const url = query ? `/admin/users?search=${encodeURIComponent(query)}` : "/admin/users";
-      const data = await API.get<{ items: Wallet[] }>(url);
-      setItems(data.items);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = useCallback(
+    async (q?: string) => {
+      setLoading(true);
+      try {
+        const query = q !== undefined ? q : search;
+        const url = query
+          ? `/admin/users?search=${encodeURIComponent(query)}`
+          : "/admin/users";
+        const data = await API.get<{ items: UserListItem[] }>(url);
+        setItems(data.items);
+      } catch (e) {
+        notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [notify, search],
+  );
 
   useEffect(() => {
-    load("");
+    void load("");
   }, []);
 
-  const openDetail = async (userId: string) => {
-    try {
-      const data = await API.get<{ wallet: Wallet | null; transactions: Transaction[] }>(
-        `/admin/user_detail?user_id=${encodeURIComponent(userId)}`,
-      );
-      setDetailUser(userId);
-      setDetailWallet(data.wallet);
-      setDetailTxs(data.transactions);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Detay yüklenemedi", "error");
-    }
-  };
-
   return (
-    <>
+    <div className="users-page">
       <div className="page-header">
         <div>
           <div className="page-title">Kullanıcılar</div>
-          <div className="page-sub">Cüzdan bakiyeleri</div>
+          <div className="page-sub">Cüzdan profilleri ve yatırım geçmişi</div>
         </div>
-        <div className="page-actions">
-          <input
-            className="form-input w-220"
-            placeholder="User ID ara..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load(search)}
-          />
-          <button type="button" className="btn btn-primary" onClick={() => load(search)}>
+        <div className="users-toolbar">
+          <div className="users-search">
+            <Icon name="search" size={14} className="users-search-icon" />
+            <input
+              className="form-input"
+              placeholder="User ID ara..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load(search)}
+            />
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => load(search)}>
             Ara
           </button>
         </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>User ID</th>
-              <th>Bakiye</th>
-              <th>Para</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={3}>Yükleniyor...</td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={3}>Kayıt yok</td>
-              </tr>
-            ) : (
-              items.map((w) => (
-                <tr key={w.userId} className="cursor-pointer" onClick={() => openDetail(w.userId)}>
-                  <td>{w.userId}</td>
-                  <td>{w.balance}</td>
-                  <td>{w.currency}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
 
-      <Modal
-        open={detailUser !== null}
-        title={detailUser ? `Kullanıcı: ${detailUser}` : ""}
-        onClose={() => setDetailUser(null)}
-        wide
-      >
-        {detailWallet ? (
-          <div className="mb-4">
-            <p>
-              <strong>Bakiye:</strong> {detailWallet.balance} {detailWallet.currency}
-            </p>
-            <p>
-              <strong>Toplam Yatırım:</strong> {detailWallet.totalDeposited}
-            </p>
-            <p>
-              <strong>Toplam Çekim:</strong> {detailWallet.totalWithdrawn}
-            </p>
-          </div>
+      <div className="users-card">
+        {loading ? (
+          <p className="users-empty">Yükleniyor…</p>
+        ) : items.length === 0 ? (
+          <p className="users-empty">Kullanıcı bulunamadı.</p>
         ) : (
-          <p>Cüzdan bulunamadı.</p>
-        )}
-        {detailTxs.length > 0 && (
-          <>
-            <div className="form-label">Son İşlemler</div>
-            <table className="w-full text-sm">
+          <div className="users-table-wrap">
+            <table className="users-table">
               <thead>
                 <tr>
-                  <th>Tip</th>
-                  <th>Tutar</th>
-                  <th>Tarih</th>
+                  <th>Kullanıcı</th>
+                  <th>Bakiye</th>
+                  <th>Onaylı Yatırım</th>
+                  <th>Yatırım</th>
+                  <th>Bekleyen</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {detailTxs.map((tx) => (
-                  <tr key={tx.id}>
-                    <td>{tx.type}</td>
-                    <td>{tx.amount}</td>
-                    <td>{new Date(tx.createdAt).toLocaleString("tr-TR")}</td>
+                {items.map((u) => (
+                  <tr key={u.userId} onClick={() => setDetailUserId(u.userId)}>
+                    <td>
+                      <div className="users-user-cell">
+                        <span className="users-avatar">{userInitial(u.userId)}</span>
+                        <div>
+                          <div className="users-user-id">{u.userId}</div>
+                          <div className="users-user-meta">
+                            Son güncelleme {formatShortDate(u.updatedAt)}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="users-metric">
+                      <strong>{u.balance.toLocaleString("tr-TR")}</strong>
+                      <span>{u.currency}</span>
+                    </td>
+                    <td className="users-metric">
+                      <strong>{u.approvedDepositTotal.toLocaleString("tr-TR")}</strong>
+                      <span>₺</span>
+                    </td>
+                    <td className="users-metric">
+                      <strong>{u.depositCount.toLocaleString("tr-TR")}</strong>
+                    </td>
+                    <td>
+                      {u.pendingDepositCount > 0 ? (
+                        <Badge variant="pending">{u.pendingDepositCount}</Badge>
+                      ) : (
+                        <span className="users-row-action">—</span>
+                      )}
+                    </td>
+                    <td className="users-row-action">›</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
-      </Modal>
-    </>
+      </div>
+
+      <UserProfileModal
+        userId={detailUserId}
+        onClose={() => setDetailUserId(null)}
+        onError={(msg) => notify(msg, "error")}
+      />
+    </div>
   );
 }

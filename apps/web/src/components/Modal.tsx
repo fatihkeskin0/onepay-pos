@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 interface ModalProps {
   open: boolean;
@@ -9,11 +10,22 @@ interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   wide?: boolean;
+  className?: string;
+  overlayClassName?: string;
+  subtitle?: string;
 }
 
-import { Icon } from "@/components/ui/Icon";
-
-export function Modal({ open, title, onClose, children, footer, wide }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+  wide,
+  className = "",
+  overlayClassName = "",
+  subtitle,
+}: ModalProps) {
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -31,20 +43,27 @@ export function Modal({ open, title, onClose, children, footer, wide }: ModalPro
 
   return (
     <div
-      className="modal-overlay"
+      className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`.trim()}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true">
+      <div
+        className={`modal${wide ? " modal-wide" : ""}${className ? ` ${className}` : ""}`.trim()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
+          <div className="modal-header-text">
+            <h2 className="modal-title">{title}</h2>
+            {subtitle ? <p className="modal-subtitle">{subtitle}</p> : null}
+          </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Kapat">
             <Icon name="close" size={16} />
           </button>
         </div>
         <div className="modal-body">{children}</div>
-        {footer && <div className="modal-footer">{footer}</div>}
+        {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>
   );

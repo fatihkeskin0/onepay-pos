@@ -4,11 +4,15 @@ import { useState } from "react";
 import { PublicAPI } from "@/lib/public-api";
 import { Button } from "@/components/ui/Button";
 
+function normalizeTelegramInput(raw: string): string {
+  return raw.trim().replace(/^@+/, "").replace(/[^a-zA-Z0-9_]/g, "");
+}
+
 export function ApplyForm() {
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [telegramUsername, setTelegramUsername] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,20 +21,26 @@ export function ApplyForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    const normalizedTelegram = normalizeTelegramInput(telegramUsername);
+    if (normalizedTelegram.length < 3) {
+      setError("Geçerli bir Telegram kullanıcı adı girin");
+      return;
+    }
+
     setLoading(true);
     try {
       await PublicAPI.submitApplication({
         company_name: companyName,
         contact_name: contactName,
         email,
-        phone,
+        telegram_username: normalizedTelegram,
         message: message || undefined,
       });
       setSuccess(true);
       setCompanyName("");
       setContactName("");
       setEmail("");
-      setPhone("");
+      setTelegramUsername("");
       setMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Başvuru gönderilemedi");
@@ -101,17 +111,23 @@ export function ApplyForm() {
           />
         </div>
         <div className="landing-apply-field">
-          <label htmlFor="apply-phone">Telefon</label>
-          <input
-            id="apply-phone"
-            type="tel"
-            className="landing-apply-input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            autoComplete="tel"
-            required
-            disabled={loading}
-          />
+          <label htmlFor="apply-telegram">Telegram k.adı</label>
+          <div className="landing-apply-prefix-wrap">
+            <span className="landing-apply-prefix" aria-hidden>
+              @
+            </span>
+            <input
+              id="apply-telegram"
+              className="landing-apply-input landing-apply-input--prefixed"
+              value={telegramUsername}
+              onChange={(e) => setTelegramUsername(normalizeTelegramInput(e.target.value))}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="kullaniciadi"
+              required
+              disabled={loading}
+            />
+          </div>
         </div>
       </div>
 

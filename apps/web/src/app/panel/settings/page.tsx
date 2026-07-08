@@ -122,7 +122,7 @@ export default function SettingsPage() {
           <div className="card mb-4">
             <h3 className="card-title-sm">Site & Destek</h3>
             <p className="settings-note mb-3">
-              Landing destek sayfasında gösterilecek Telegram kullanıcı adı. @ işareti olmadan yazın.
+              Landing ana sayfasında gösterilecek Telegram kullanıcı adı. @ işareti olmadan yazın.
             </p>
             <div className="form-group">
               <label className="form-label">Telegram destek kullanıcı adı</label>

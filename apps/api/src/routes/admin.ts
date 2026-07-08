@@ -10,6 +10,7 @@ import { invalidatePosMethodsCache, listPosMethodsWithMeta, activateSinglePosMet
 import { formatBcExpiry } from "../services/format.js";
 import { getActivityLogs } from "../services/activity-log.js";
 import { buildSiteDepositsXlsx } from "../services/deposit-export.js";
+import { getUserProfileDetail, listUserProfiles } from "../services/user-profile.js";
 import { saveSiteLogo } from "../services/site-logo.js";
 import { getCloudflareStatus, isCloudflareConfigured, syncCloudflare } from "../services/cloudflare.js";
 import {
@@ -20,6 +21,7 @@ import {
   syncTrustedIpIntegrations,
   updateTrustedIp,
 } from "../services/trusted-ip.js";
+import { buildDashboardStats, resolveDashboardRange } from "../services/dashboard-stats.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -38,79 +40,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const weekStart = new Date(today);
-    weekStart.setDate(weekStart.getDate() - 6);
-
-    const [
-      pending,
-      approvedToday,
-      amountToday,
-      commissionToday,
-      rejectedToday,
-      onlineAgents,
-      weekDeposits,
-      recent,
-    ] = await Promise.all([
-      prisma.deposit.count({ where: { status: "pending" } }),
-      prisma.deposit.count({ where: { status: "approved", approvedAt: { gte: today } } }),
-      prisma.deposit.aggregate({ where: { status: "approved", approvedAt: { gte: today } }, _sum: { amount: true } }),
-      prisma.deposit.aggregate({ where: { status: "approved", approvedAt: { gte: today } }, _sum: { commissionAmount: true } }),
-      prisma.deposit.count({ where: { status: "rejected", approvedAt: { gte: today } } }),
-      prisma.cashier.count({
-        where: {
-          role: "kasiyer",
-          isActive: true,
-          lastSeenAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
-        },
-      }),
-      prisma.deposit.findMany({
-        where: { status: "approved", approvedAt: { gte: weekStart } },
-        select: { amount: true, approvedAt: true },
-      }),
-      prisma.deposit.findMany({
-        take: 8,
-        orderBy: { createdAt: "desc" },
-        include: { site: { select: { name: true } } },
-      }),
-    ]);
-
-    const trendMap = new Map<string, { count: number; amount: number }>();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      trendMap.set(d.toISOString().slice(0, 10), { count: 0, amount: 0 });
+    try {
+      const q = request.query as { from?: string; to?: string; date?: string };
+      const bounds = resolveDashboardRange(q.from, q.to, q.date);
+      const stats = await buildDashboardStats(bounds, true);
+      ok(reply, stats);
+    } catch (e) {
+      error(reply, e instanceof Error ? e.message : "Dashboard verisi alınamadı", 400);
     }
-    for (const dep of weekDeposits) {
-      if (!dep.approvedAt) continue;
-      const key = dep.approvedAt.toISOString().slice(0, 10);
-      const slot = trendMap.get(key);
-      if (slot) {
-        slot.count += 1;
-        slot.amount += Number(dep.amount);
-      }
-    }
-    const trend = Array.from(trendMap.entries()).map(([date, v]) => ({ date, ...v }));
-
-    ok(reply, {
-      pending_deposits: pending,
-      approved_today: approvedToday,
-      amount_today: amountToday._sum.amount ?? 0,
-      commission_today: commissionToday._sum.commissionAmount ?? 0,
-      rejected_today: rejectedToday,
-      online_agents: onlineAgents,
-      trend,
-      recent: recent.map((d) => ({
-        id: d.id,
-        reference: d.reference,
-        amount: d.amount,
-        status: d.status,
-        site_name: d.site?.name ?? "—",
-        user_id: d.userId,
-        created_at: d.createdAt.toISOString(),
-      })),
-    });
   });
 
   app.get("/badges", async (request, reply) => {
@@ -300,6 +237,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const where: Record<string, unknown> = {};
     if (status !== "all") where.status = status;
     if (q.site_id) where.siteId = Number(q.site_id);
+    if (q.user_id) where.userId = String(q.user_id);
 
     const [items, total] = await Promise.all([
       prisma.deposit.findMany({
@@ -355,25 +293,22 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
     const search = (request.query as { search?: string }).search ?? "";
-    const wallets = await prisma.wallet.findMany({
-      where: search ? { userId: { contains: search } } : {},
-      take: 50,
-      orderBy: { updatedAt: "desc" },
-    });
-    ok(reply, { items: wallets });
+    const items = await listUserProfiles(search);
+    ok(reply, { items });
   });
 
   app.get("/user_detail", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
-    const userId = String((request.query as { user_id?: string }).user_id ?? "");
-    const wallet = await prisma.wallet.findUnique({ where: { userId } });
-    const txs = await prisma.transaction.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
-    ok(reply, { wallet, transactions: txs });
+    const q = request.query as { user_id?: string; deposit_page?: string };
+    const userId = String(q.user_id ?? "").trim();
+    if (!userId) {
+      error(reply, "user_id gerekli", 422);
+      return;
+    }
+    const depositPage = Math.max(1, Number(q.deposit_page ?? 1));
+    const detail = await getUserProfileDetail(userId, { depositPage });
+    ok(reply, detail);
   });
 
   app.get("/agent_monitor", async (request, reply) => {
@@ -563,6 +498,35 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.get("/applications/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+
+    const id = Number((request.params as { id: string }).id);
+    if (!id) {
+      error(reply, "Başvuru bulunamadı", 404);
+      return;
+    }
+
+    const row = await prisma.merchantApplication.findUnique({ where: { id } });
+    if (!row) {
+      error(reply, "Başvuru bulunamadı", 404);
+      return;
+    }
+
+    ok(reply, {
+      id: row.id,
+      company_name: row.companyName,
+      contact_name: row.contactName,
+      email: row.email,
+      telegram_username: row.telegramUsername,
+      message: row.message,
+      status: row.status,
+      ip: row.ip,
+      created_at: row.createdAt.toISOString(),
+    });
+  });
+
   app.get("/applications", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
@@ -589,8 +553,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         company_name: a.companyName,
         contact_name: a.contactName,
         email: a.email,
-        phone: a.phone,
-        message: a.message,
+        telegram_username: a.telegramUsername,
+        has_message: Boolean(a.message?.trim()),
         status: a.status,
         ip: a.ip,
         created_at: a.createdAt.toISOString(),

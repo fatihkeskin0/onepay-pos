@@ -7,19 +7,6 @@ export function resolveBrandLogoUrl(url: string | null | undefined): string | nu
     return url;
   }
 
-  const base = getApiBaseUrl();
-  const path = url.startsWith("/backend/")
-    ? url.replace(/^\/backend/, "")
-    : url.startsWith("/uploads/")
-      ? url
-      : url;
-
-  if (base === "/backend") {
-    if (url.startsWith("/backend/")) return url;
-    if (url.startsWith("/uploads/")) return `/backend${url}`;
-    return url;
-  }
-
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${normalized}`;
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${getApiBaseUrl()}${path}`;
 }

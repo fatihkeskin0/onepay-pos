@@ -1,4 +1,4 @@
-export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location 'https://onekart.info/backend/user/create_payment_link' \\
+export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location '{API_PUBLIC_URL}/user/create_payment_link' \\
 --header 'Content-Type: application/json' \\
 --header 'X-Api-Key: {site_api_key}' \\
 --data-raw '{
@@ -14,12 +14,12 @@ export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
   "message": "ok",
   "data": {
     "token": "a1b2c3d4e5f6789012345678abcdef01",
-    "url": "{payment_origin}/pay/a1b2c3d4e5f6789012345678abcdef01",
+    "url": "{APP_PAYMENT_URL}/pay/a1b2c3d4e5f6789012345678abcdef01",
     "expires_at": "2026-07-05 18:45:00"
   }
 }`;
 
-export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location 'https://onekart.info/backend/user/deposit_status?ref={reference}&token={deposit_token}'`;
+export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location '{API_PUBLIC_URL}/user/deposit_status?ref={reference}&token={deposit_token}'`;
 
 export const SAMPLE_DEPOSIT_STATUS_RES = `{
   "success": true,

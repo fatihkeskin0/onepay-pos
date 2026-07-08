@@ -96,6 +96,11 @@ export function isPanelRequestHost(host: string): boolean {
   return false;
 }
 
+export function resolvePanelDashboardHref(): string {
+  const origin = resolvePanelOrigin();
+  return origin ? `${origin}/dashboard` : "/dashboard";
+}
+
 /** Marketing and panel are separate — panel URLs always belong on APP_BASE_URL. */
 export function shouldRedirectPanelRoutesToAppOrigin(): boolean {
   return usesMarketingDomain();

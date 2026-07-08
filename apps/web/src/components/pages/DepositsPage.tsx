@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { API } from "@/lib/api";
+import { panelHref } from "@/lib/panel-routes";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { useClientSession } from "@/hooks/useClientSession";
@@ -25,9 +27,17 @@ interface EditLog {
   editedAt: string;
 }
 
+const PAGE_SIZE = 20;
+
 export default function DepositsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const filterUserId = searchParams.get("user_id")?.trim() ?? "";
+
   const [items, setItems] = useState<Deposit[]>([]);
   const [tab, setTab] = useState("pending");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const { notify } = useToast();
   const { ready, isAdmin } = useClientSession();
@@ -36,28 +46,54 @@ export default function DepositsPage() {
   const [rejectModal, setRejectModal] = useState<{ id: number; reason: string } | null>(null);
   const [editModal, setEditModal] = useState<{ id: number; amount: string; logs: EditLog[] } | null>(null);
 
-  const load = async (s: string) => {
-    setLoading(true);
-    try {
-      const data = await API.get<{ items: Deposit[] }>(`${listPrefix}/deposits?status=${s}`);
-      setItems(data.items);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const load = useCallback(
+    async (status: string, nextPage: number) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          status,
+          page: String(nextPage),
+        });
+        if (filterUserId && isAdmin) params.set("user_id", filterUserId);
+        const data = await API.get<{ items: Deposit[]; total: number; page: number }>(
+          `${listPrefix}/deposits?${params.toString()}`,
+        );
+        setItems(data.items);
+        setTotal(data.total ?? data.items.length);
+        setPage(data.page ?? nextPage);
+      } catch (e) {
+        notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filterUserId, isAdmin, listPrefix, notify],
+  );
 
   useEffect(() => {
     if (!ready) return;
-    load(tab);
-  }, [tab, listPrefix, ready]);
+    void load(tab, page);
+  }, [tab, page, ready, filterUserId, load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterUserId]);
+
+  const clearUserFilter = () => {
+    router.push(panelHref("deposit"));
+  };
+
+  const reload = () => {
+    void load(tab, page);
+  };
 
   const approve = async (id: number) => {
     try {
       await API.post("/cashier/approve_deposit", { id });
       notify("Onaylandı", "success");
-      load(tab);
+      reload();
     } catch (e) {
       notify(e instanceof Error ? e.message : "Hata", "error");
     }
@@ -69,7 +105,7 @@ export default function DepositsPage() {
       await API.post("/cashier/reject_deposit", { id: rejectModal.id, reason: rejectModal.reason });
       notify("Reddedildi", "success");
       setRejectModal(null);
-      load(tab);
+      reload();
     } catch (e) {
       notify(e instanceof Error ? e.message : "Hata", "error");
     }
@@ -93,7 +129,7 @@ export default function DepositsPage() {
       });
       notify("Tutar güncellendi", "success");
       setEditModal(null);
-      load(tab);
+      reload();
     } catch (e) {
       notify(e instanceof Error ? e.message : "Hata", "error");
     }
@@ -118,13 +154,29 @@ export default function DepositsPage() {
           <div className="page-sub">Kredi kartı yatırım işlemleri</div>
         </div>
       </div>
+
+      {filterUserId && isAdmin ? (
+        <div className="deposit-user-filter">
+          <span>
+            Kullanıcı filtresi: <code>{filterUserId}</code>
+            {total > 0 ? ` · ${total.toLocaleString("tr-TR")} kayıt` : null}
+          </span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={clearUserFilter}>
+            Filtreyi kaldır
+          </button>
+        </div>
+      ) : null}
+
       <div className="filter-tabs">
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             className={`ftab ftab-${t.key}${tab === t.key ? " active" : ""}`}
-            onClick={() => setTab(t.key)}
+            onClick={() => {
+              setTab(t.key);
+              setPage(1);
+            }}
           >
             {t.label}
           </button>
@@ -202,6 +254,31 @@ export default function DepositsPage() {
           </tbody>
         </table>
       </div>
+
+      {pages > 1 ? (
+        <div className="pagination-row">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Önceki
+          </button>
+          <span className="text-muted text-sm">
+            Sayfa {page} / {pages}
+            {total > 0 ? ` · ${total.toLocaleString("tr-TR")} kayıt` : null}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={page >= pages || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Sonraki
+          </button>
+        </div>
+      ) : null}
 
       <Modal
         open={rejectModal !== null}

@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
 import "@/styles/index.css";
 import { ToastProvider } from "@/components/ToastProvider";
-
-const inter = Inter({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-inter",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "OnePOS — Güvenli Kart Ödemesi",
@@ -17,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" suppressHydrationWarning className={inter.variable}>
+    <html lang="tr" suppressHydrationWarning className={GeistSans.variable}>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -25,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={GeistSans.className}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

@@ -12,6 +12,8 @@ import { makePartialToken, verifyPartialToken, verifyTotp, generateSecret, getQr
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
 import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
+import { collectSystemStatus } from "../services/system-health.js";
+import { buildDashboardStats, buildHourlyStats, resolveDashboardRange } from "../services/dashboard-stats.js";
 
 export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   app.post("/login", async (request, reply) => {
@@ -199,92 +201,40 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
     if (!user) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const weekStart = new Date(today);
-    weekStart.setDate(weekStart.getDate() - 6);
-
-    const [pending, approvedToday, totalToday, commissionToday, rejectedToday, weekDeposits, recent] =
-      await Promise.all([
-        prisma.deposit.count({ where: { status: "pending" } }),
-        prisma.deposit.count({ where: { status: "approved", approvedAt: { gte: today } } }),
-        prisma.deposit.aggregate({
-          where: { status: "approved", approvedAt: { gte: today } },
-          _sum: { amount: true },
-        }),
-        prisma.deposit.aggregate({
-          where: { status: "approved", approvedAt: { gte: today } },
-          _sum: { commissionAmount: true },
-        }),
-        prisma.deposit.count({ where: { status: "rejected", approvedAt: { gte: today } } }),
-        prisma.deposit.findMany({
-          where: { status: "approved", approvedAt: { gte: weekStart } },
-          select: { amount: true, approvedAt: true },
-        }),
-        prisma.deposit.findMany({
-          take: 8,
-          orderBy: { createdAt: "desc" },
-          include: { site: { select: { name: true } } },
-        }),
-      ]);
-
-    const trendMap = new Map<string, { count: number; amount: number }>();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      trendMap.set(d.toISOString().slice(0, 10), { count: 0, amount: 0 });
+    try {
+      const q = request.query as { from?: string; to?: string; date?: string };
+      const bounds = resolveDashboardRange(q.from, q.to, q.date);
+      const stats = await buildDashboardStats(bounds, false);
+      ok(reply, stats);
+    } catch (e) {
+      error(reply, e instanceof Error ? e.message : "İstatistikler alınamadı", 400);
     }
-    for (const dep of weekDeposits) {
-      if (!dep.approvedAt) continue;
-      const key = dep.approvedAt.toISOString().slice(0, 10);
-      const slot = trendMap.get(key);
-      if (slot) {
-        slot.count += 1;
-        slot.amount += Number(dep.amount);
-      }
-    }
-    const trend = Array.from(trendMap.entries()).map(([date, v]) => ({ date, ...v }));
-
-    ok(reply, {
-      pending_deposits: pending,
-      approved_today: approvedToday,
-      amount_today: totalToday._sum.amount ?? 0,
-      commission_today: commissionToday._sum.commissionAmount ?? 0,
-      rejected_today: rejectedToday,
-      trend,
-      recent: recent.map((d) => ({
-        id: d.id,
-        reference: d.reference,
-        amount: d.amount,
-        status: d.status,
-        site_name: d.site?.name ?? "—",
-        user_id: d.userId,
-        created_at: d.createdAt.toISOString(),
-      })),
-    });
   });
 
   app.get("/hourly_stats", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
     if (!user) return;
 
-    const deposits = await prisma.deposit.findMany({
-      where: { status: "approved", approvedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-      select: { amount: true, approvedAt: true },
-    });
-
-    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0, amount: 0 }));
-    for (const d of deposits) {
-      if (!d.approvedAt) continue;
-      const h = d.approvedAt.getHours();
-      const slot = hours[h];
-      if (slot) {
-        slot.count += 1;
-        slot.amount += Number(d.amount);
-      }
+    try {
+      const q = request.query as { from?: string; to?: string; date?: string };
+      const bounds = resolveDashboardRange(q.from, q.to, q.date);
+      const hourly = await buildHourlyStats(bounds);
+      ok(reply, hourly);
+    } catch (e) {
+      error(reply, e instanceof Error ? e.message : "Saatlik veri alınamadı", 400);
     }
+  });
 
-    ok(reply, { hours });
+  app.get("/system_status", async (request, reply) => {
+    const user = await requireAuth(request, reply, "kasiyer", "admin");
+    if (!user) return;
+
+    try {
+      const status = await collectSystemStatus();
+      ok(reply, status);
+    } catch (e) {
+      error(reply, e instanceof Error ? e.message : "Sistem durumu alınamadı", 500);
+    }
   });
 
   app.get("/commission_chart", async (request, reply) => {

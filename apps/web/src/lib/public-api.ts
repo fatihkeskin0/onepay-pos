@@ -40,7 +40,7 @@ export const PublicAPI = {
     company_name: string;
     contact_name: string;
     email: string;
-    phone: string;
+    telegram_username: string;
     message?: string;
   }) => publicRequest<{ submitted: boolean }>("POST", "/apply", payload),
 };

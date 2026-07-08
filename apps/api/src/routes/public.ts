@@ -3,13 +3,9 @@ import { prisma } from "@onepara/db";
 import { ok, error } from "../services/response.js";
 import { byIp } from "../services/rate-limit.js";
 import { getSetting } from "../services/callback.js";
+import { isValidTelegramUsername, normalizeTelegramUsername } from "../services/telegram-username.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function normalizeTelegramUsername(raw: string | null | undefined): string {
-  const trimmed = String(raw ?? "").trim().replace(/^@+/, "");
-  return trimmed.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 64);
-}
 
 export async function publicRoutes(app: FastifyInstance): Promise<void> {
   app.get("/landing-info", async (_request, reply) => {
@@ -27,17 +23,17 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
       company_name?: string;
       contact_name?: string;
       email?: string;
-      phone?: string;
+      telegram_username?: string;
       message?: string;
     };
 
     const companyName = String(body.company_name ?? "").trim().slice(0, 200);
     const contactName = String(body.contact_name ?? "").trim().slice(0, 120);
     const email = String(body.email ?? "").trim().toLowerCase().slice(0, 200);
-    const phone = String(body.phone ?? "").trim().slice(0, 40);
+    const telegramUsername = normalizeTelegramUsername(body.telegram_username);
     const message = String(body.message ?? "").trim().slice(0, 2000) || null;
 
-    if (!companyName || !contactName || !email || !phone) {
+    if (!companyName || !contactName || !email || !telegramUsername) {
       error(reply, "Lütfen zorunlu alanları doldurun", 400);
       return;
     }
@@ -47,8 +43,8 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (phone.replace(/\D/g, "").length < 10) {
-      error(reply, "Geçerli bir telefon numarası girin", 400);
+    if (!isValidTelegramUsername(telegramUsername)) {
+      error(reply, "Geçerli bir Telegram kullanıcı adı girin", 400);
       return;
     }
 
@@ -62,7 +58,7 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
         companyName,
         contactName,
         email,
-        phone,
+        telegramUsername,
         message,
         ip,
       },

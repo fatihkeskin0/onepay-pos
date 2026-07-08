@@ -96,8 +96,37 @@
 
 /* Calendar popover */
 .calendar-popover.popover {
-  min-width: 252px;
-  padding: 10px;
+  width: 280px;
+  min-width: 280px;
+  max-width: calc(100vw - 16px);
+  padding: 12px;
+}
+
+/* Reset global table.css inside react-day-picker */
+.calendar-popover .rdp-root table {
+  width: auto;
+  border-collapse: collapse;
+  font-size: inherit;
+}
+
+.calendar-popover .rdp-root th,
+.calendar-popover .rdp-root td {
+  padding: 0;
+  text-align: center;
+  border-bottom: none;
+  background: transparent;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.calendar-popover .rdp-root tr:hover td {
+  background: transparent;
+}
+
+.calendar-popover .rdp-root thead th {
+  background: transparent;
 }
 
 .calendar-popover .rdp-root {

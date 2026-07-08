@@ -10,7 +10,64 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-:focus-visible {
+/* Mouse click: no focus ring on passive surfaces */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Charts, tables, panels — never show click-focus ring */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.table-wrap,
+.data-table,
+.dash-panel,
+.dash-rechart,
+.dash-chart-panel,
+.dash-table-wrap,
+.card,
+svg {
+  outline: none;
+}
+
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.table-wrap:focus,
+.table-wrap:focus-visible,
+.data-table:focus,
+.data-table:focus-visible,
+.dash-panel:focus,
+.dash-panel:focus-visible,
+.dash-rechart:focus,
+.dash-rechart:focus-visible,
+.dash-chart-panel:focus,
+.dash-chart-panel:focus-visible,
+.dash-table-wrap:focus,
+.dash-table-wrap:focus-visible,
+.card:focus,
+.card:focus-visible,
+svg:focus,
+svg:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Keyboard: ring only on intentional controls */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="link"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="radio"]:focus-visible,
+summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
