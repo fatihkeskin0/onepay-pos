@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PublicAPI } from "@/lib/public-api";
 import { Button } from "@/components/ui/Button";
 
@@ -8,7 +8,35 @@ function normalizeTelegramInput(raw: string): string {
   return raw.trim().replace(/^@+/, "").replace(/[^a-zA-Z0-9_]/g, "");
 }
 
+function ApplyFormPlaceholder() {
+  return (
+    <div className="landing-apply-form landing-apply-form--placeholder" aria-hidden>
+      <div className="landing-apply-grid">
+        <div className="landing-apply-field">
+          <span className="landing-apply-skeleton-label" />
+          <span className="landing-apply-skeleton-input" />
+        </div>
+        <div className="landing-apply-field">
+          <span className="landing-apply-skeleton-label" />
+          <span className="landing-apply-skeleton-input" />
+        </div>
+        <div className="landing-apply-field">
+          <span className="landing-apply-skeleton-label" />
+          <span className="landing-apply-skeleton-input" />
+        </div>
+        <div className="landing-apply-field">
+          <span className="landing-apply-skeleton-label" />
+          <span className="landing-apply-skeleton-input" />
+        </div>
+      </div>
+      <span className="landing-apply-skeleton-input landing-apply-skeleton-input--tall" />
+      <span className="landing-apply-skeleton-btn" />
+    </div>
+  );
+}
+
 export function ApplyForm() {
+  const [mounted, setMounted] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,6 +45,10 @@ export function ApplyForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +80,10 @@ export function ApplyForm() {
       setLoading(false);
     }
   };
+
+  if (!mounted) {
+    return <ApplyFormPlaceholder />;
+  }
 
   if (success) {
     return (
@@ -105,7 +141,10 @@ export function ApplyForm() {
             className="landing-apply-input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
             required
             disabled={loading}
           />
