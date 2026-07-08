@@ -1,4 +1,4 @@
-export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location '{API_PUBLIC_URL}/user/create_payment_link' \\
+export const SAMPLE_CREATE_PAYMENT_LINK_REQ = `curl --location '{API_PUBLIC_URL}{API_ROUTE_PREFIX}/user/create_payment_link' \\
 --header 'Content-Type: application/json' \\
 --header 'X-Api-Key: {site_api_key}' \\
 --data-raw '{
@@ -19,7 +19,7 @@ export const SAMPLE_CREATE_PAYMENT_LINK_RES = `{
   }
 }`;
 
-export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location '{API_PUBLIC_URL}/user/deposit_status?ref={reference}&token={deposit_token}'`;
+export const SAMPLE_DEPOSIT_STATUS_REQ = `curl --location '{API_PUBLIC_URL}{API_ROUTE_PREFIX}/user/deposit_status?ref={reference}&token={deposit_token}'`;
 
 export const SAMPLE_DEPOSIT_STATUS_RES = `{
   "success": true,

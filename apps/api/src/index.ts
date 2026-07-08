@@ -1,9 +1,10 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import fastifyStatic from "@fastify/static";
 import fastifyRawBody from "fastify-raw-body";
 import { join } from "node:path";
+import { API_ROUTE_PREFIX } from "@onepara/shared";
 import { config } from "./config.js";
 import { createAppLogger, DEV_QUIET_ROUTE_PATHS } from "./logger.js";
 import { error } from "./services/response.js";
@@ -88,7 +89,11 @@ const app = Fastify({
 if (config.app.env === "development") {
   app.addHook("onRoute", (routeOptions) => {
     const path = routeOptions.url ?? "";
-    if (DEV_QUIET_ROUTE_PATHS.has(path)) {
+    const quiet =
+      path === "/health" ||
+      path.endsWith("/badges") ||
+      DEV_QUIET_ROUTE_PATHS.has(path);
+    if (quiet) {
       routeOptions.logLevel = "silent";
     }
   });
@@ -137,12 +142,16 @@ app.get("/health", async (_request, reply) => {
   reply.status(okHealth ? 200 : 503).send({ ok: okHealth, db: dbOk, redis: redisOk });
 });
 
-await app.register(userRoutes, { prefix: "/user" });
-await app.register(cashierRoutes, { prefix: "/cashier" });
-await app.register(adminRoutes, { prefix: "/admin" });
-await app.register(pspRoutes, { prefix: "/psp" });
-await app.register(bcRoutes, { prefix: "/api" });
-await app.register(publicRoutes, { prefix: "/public" });
+async function versionedApiRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(userRoutes, { prefix: "/user" });
+  await app.register(cashierRoutes, { prefix: "/cashier" });
+  await app.register(adminRoutes, { prefix: "/admin" });
+  await app.register(pspRoutes, { prefix: "/psp" });
+  await app.register(bcRoutes, { prefix: "/api" });
+  await app.register(publicRoutes, { prefix: "/public" });
+}
+
+await app.register(versionedApiRoutes, { prefix: API_ROUTE_PREFIX });
 
 setInterval(() => {
   autoCancelDeposits().catch(console.error);

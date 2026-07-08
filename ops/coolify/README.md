@@ -7,7 +7,7 @@ Deploy OnePOS as a **Docker Compose** resource on Coolify.
 | Service | Image / Dockerfile | Container port | Public domain |
 |---------|-------------------|----------------|---------------|
 | `web` | `ops/docker/Dockerfile.web` | 80 | Yes — panel + `/pay/*` + `/docs` |
-| `api` | `ops/docker/Dockerfile.api` | 80 | Yes — PSP webhooks (`/psp/*`) |
+| `api` | `ops/docker/Dockerfile.api` | 80 | Yes — PSP webhooks (`/v1/psp/*`) |
 
 **Required backing services:** PostgreSQL and Redis — use **Coolify managed resources** (e.g. `postgres:18-alpine`). Bundled stack for local only: `ops/docker/compose.bundled.yaml`.
 
@@ -56,7 +56,7 @@ Sync creates **A records** with **proxied=true** for hosts from `APP_MARKETING_U
 **Admin → Güvenlik → IP Yönetimi** (`/security`):
 
 - Add multiple IPs/CIDRs (BetConstruct, merchant backends)
-- **API rate limit bypass** for whitelisted IPs (all routes including `/api/*`, `/user/*`)
+- **API rate limit bypass** for whitelisted IPs (all routes including `/v1/api/*`, `/v1/user/*`)
 - **Cloudflare allow** firewall access rules per zone (via API)
 - **fail2ban ignore file** export to `FAIL2BAN_IGNORE_FILE` (default `/app/data/fail2ban/onepos-ignore.conf`)
 
@@ -185,8 +185,8 @@ docker compose -f ops/docker/compose.bundled.yaml up --build
 ## Architecture notes
 
 - Panel/pay browser requests and merchant integrations use `https://api.onekart.info` (`NEXT_PUBLIC_API_URL` baked at web build from `API_PUBLIC_URL`).
-- Merchant API: `POST https://api.onekart.info/user/create_payment_link` (documented at `/docs`).
-- PSP callbacks hit **api** domain: `POST /psp/{provider}/callback`.
+- Merchant API: `POST https://api.onekart.info/v1/user/create_payment_link` (documented at `/docs`).
+- PSP callbacks hit **api** domain: `POST /v1/psp/{provider}/callback`.
 - Health checks: `GET /api/health` (web), `GET /health` (api — includes Redis status).
 - Rate limiting uses Redis (not DB). Audit/login/chat logs stay in PostgreSQL.
 

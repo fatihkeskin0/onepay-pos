@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
+import { API_ROUTE_PREFIX } from "@onepara/shared";
 import { prisma, type Prisma } from "@onepara/db";
 import { config } from "../config.js";
 import { requireSite } from "../services/site-auth.js";
@@ -296,7 +297,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         userName: session.userName,
         siteName: site.name,
         returnUrl: session.returnUrl || `${config.app.paymentUrl}/pay/${sessionToken}`,
-        callbackUrl: `${config.api.publicUrl}/psp/${provider.name}/callback`,
+        callbackUrl: `${config.api.publicUrl}${API_ROUTE_PREFIX}/psp/${provider.name}/callback`,
         userIp: request.ip ?? "127.0.0.1",
         email: `${userId}@${site.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "site"}.pay`,
       });

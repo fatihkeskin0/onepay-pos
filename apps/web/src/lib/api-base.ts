@@ -1,3 +1,5 @@
+import { API_ROUTE_PREFIX } from "@onepara/shared";
+
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
@@ -31,5 +33,8 @@ export function getApiBaseUrl(): string {
 
 export function apiUrl(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${getApiBaseUrl()}${normalized}`;
+  const versioned = normalized.startsWith(`${API_ROUTE_PREFIX}/`)
+    ? normalized
+    : `${API_ROUTE_PREFIX}${normalized}`;
+  return `${getApiBaseUrl()}${versioned}`;
 }

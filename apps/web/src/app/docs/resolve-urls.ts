@@ -1,3 +1,4 @@
+import { API_ROUTE_PREFIX } from "@onepara/shared";
 import { getApiBaseUrl } from "@/lib/api-base";
 import type { DocsContent } from "./types";
 
@@ -38,6 +39,7 @@ export function resolveDocsContent(template: DocsContent): DocsContent {
 
   return deepResolve(template, {
     API_PUBLIC_URL: apiPublicUrl,
+    API_ROUTE_PREFIX,
     APP_PAYMENT_URL: paymentUrl,
     payment_origin: paymentUrl,
   });

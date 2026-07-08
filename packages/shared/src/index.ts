@@ -119,3 +119,7 @@ export const LS_KEYS = {
 } as const;
 
 export type PspProviderName = "paytr" | "stripe" | "sumup";
+
+/** Current REST API version segment (e.g. /v1/user/...). */
+export const API_VERSION = "v1";
+export const API_ROUTE_PREFIX = `/${API_VERSION}`;
