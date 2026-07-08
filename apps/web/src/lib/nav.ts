@@ -16,6 +16,7 @@ export const PAGE_HREF: Record<string, string> = {
   "adm-giris": panelHref("logs"),
   "adm-raporlar": panelHref("reports"),
   "adm-supheliler": panelHref("suspicious"),
+  "adm-guvenlik": panelHref("security"),
   "adm-duyurular": panelHref("announcements"),
   "kas-duyurular": panelHref("announcements"),
   "adm-ayarlar": panelHref("settings"),

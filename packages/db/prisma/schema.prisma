@@ -342,3 +342,20 @@ model PosMethod {
 
   @@map("pos_methods")
 }
+
+model TrustedIp {
+  id                Int      @id @default(autoincrement())
+  cidr              String   @unique @db.VarChar(64)
+  label             String   @db.VarChar(120)
+  category          String   @default("betconstruct") @db.VarChar(30)
+  skipRateLimit     Boolean  @default(true) @map("skip_rate_limit")
+  syncCloudflare    Boolean  @default(true) @map("sync_cloudflare")
+  cloudflareRuleIds Json?    @map("cloudflare_rule_ids")
+  isActive          Boolean  @default(true) @map("is_active")
+  note              String?  @db.VarChar(500)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("trusted_ips")
+}

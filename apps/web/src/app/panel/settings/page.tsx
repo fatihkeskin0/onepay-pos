@@ -26,76 +26,6 @@ export default function SettingsPage() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
-  interface CfRecordStatus {
-    hostname: string;
-    recordName: string;
-    exists: boolean;
-    type?: string;
-    content?: string;
-    proxied?: boolean;
-    matchesOrigin: boolean;
-    proxiedOk: boolean;
-  }
-
-  interface CfZoneStatus {
-    id: string;
-    domain: string;
-    sslMode: string | null;
-    sslOk: boolean;
-    alwaysHttps: boolean | null;
-    alwaysHttpsOk: boolean;
-    records: CfRecordStatus[];
-  }
-
-  interface CfStatus {
-    configured: boolean;
-    tokenValid: boolean;
-    originIp: string;
-    autoSync: boolean;
-    zones: CfZoneStatus[];
-    errors: string[];
-  }
-
-  const [cfStatus, setCfStatus] = useState<CfStatus | null>(null);
-  const [cfLoading, setCfLoading] = useState(false);
-  const [cfSyncing, setCfSyncing] = useState(false);
-
-  const loadCloudflareStatus = async () => {
-    setCfLoading(true);
-    try {
-      const data = await API.get<CfStatus>("/admin/cloudflare/status");
-      setCfStatus(data);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Cloudflare durumu alınamadı", "error");
-    } finally {
-      setCfLoading(false);
-    }
-  };
-
-  const syncCloudflare = async (opts: { dns?: boolean; ssl?: boolean }) => {
-    setCfSyncing(true);
-    try {
-      const result = await API.post<{
-        dns: { created: number; updated: number; skipped: number; errors: string[] };
-        ssl: { updated: number; errors: string[] };
-      }>("/admin/cloudflare/sync", opts);
-      const parts: string[] = [];
-      if (opts.dns !== false) parts.push(`DNS: ${result.dns.created} yeni, ${result.dns.updated} güncellendi`);
-      if (opts.ssl !== false) parts.push(`SSL: ${result.ssl.updated} ayar güncellendi`);
-      const allErrors = [...(result.dns?.errors ?? []), ...(result.ssl?.errors ?? [])];
-      if (allErrors.length > 0) {
-        notify(`${parts.join(" · ")} — ${allErrors.length} hata`, "error");
-      } else {
-        notify(parts.join(" · ") || "Senkron tamamlandı", "success");
-      }
-      await loadCloudflareStatus();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Senkron başarısız", "error");
-    } finally {
-      setCfSyncing(false);
-    }
-  };
-
   useEffect(() => {
     if (!ready || !isAdmin) return;
     setSettingsLoading(true);
@@ -103,7 +33,6 @@ export default function SettingsPage() {
       .then((d) => setTelegramUsername(d.settings.telegram_support_username ?? ""))
       .catch(() => undefined)
       .finally(() => setSettingsLoading(false));
-    loadCloudflareStatus();
   }, [isAdmin, ready]);
 
   const saveSiteSettings = async () => {
@@ -227,108 +156,13 @@ export default function SettingsPage() {
             </Link>
           </div>
           <div className="card mb-4">
-            <div className="flex-row flex-end mb-3">
-              <h3 className="card-title-sm" style={{ flex: 1 }}>Cloudflare</h3>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={loadCloudflareStatus}
-                disabled={cfLoading || cfSyncing}
-              >
-                {cfLoading ? "Yükleniyor…" : "Yenile"}
-              </button>
-            </div>
+            <h3 className="card-title-sm">Güvenlik & Cloudflare</h3>
             <p className="settings-note mb-3">
-              DNS kayıtları turuncu bulut (proxied) ile origin IP&apos;ye yönlendirilir. SSL: Full (strict) + Always HTTPS.
+              Güvenilir IP listesi, Cloudflare allow kuralları ve fail2ban export IP Yönetimi sayfasından yapılır.
             </p>
-            {cfStatus && (
-              <>
-                <div className="settings-note mb-3">
-                  Token: {cfStatus.tokenValid ? "geçerli" : "geçersiz veya eksik"}
-                  {" · "}
-                  Yapılandırma: {cfStatus.configured ? "tamam" : "eksik"}
-                  {cfStatus.originIp ? ` · Origin: ${cfStatus.originIp}` : ""}
-                  {cfStatus.autoSync ? " · Otomatik senkron: açık" : ""}
-                </div>
-                {cfStatus.errors.length > 0 && (
-                  <div className="settings-note mb-3" style={{ color: "var(--danger, #c0392b)" }}>
-                    {cfStatus.errors.join(" · ")}
-                  </div>
-                )}
-                {cfStatus.zones.map((zone) => (
-                  <div key={zone.id} className="mb-4">
-                    <div className="font-medium mb-2">
-                      {zone.domain}
-                      {" — SSL: "}
-                      {zone.sslMode ?? "?"}
-                      {zone.sslOk ? " ✓" : " (strict bekleniyor)"}
-                      {" · HTTPS: "}
-                      {zone.alwaysHttpsOk ? "açık ✓" : "kapalı"}
-                    </div>
-                    {zone.records.length === 0 ? (
-                      <p className="settings-note">Bu zone için beklenen kayıt yok.</p>
-                    ) : (
-                      <div className="table-wrap">
-                        <table className="data-table">
-                          <thead>
-                            <tr>
-                              <th>Host</th>
-                              <th>Tip</th>
-                              <th>Hedef</th>
-                              <th>Proxy</th>
-                              <th>Durum</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {zone.records.map((rec) => (
-                              <tr key={rec.hostname}>
-                                <td>{rec.hostname}</td>
-                                <td>{rec.exists ? rec.type : "—"}</td>
-                                <td>{rec.content ?? "—"}</td>
-                                <td>{rec.proxiedOk ? "Proxied" : rec.exists ? "DNS only" : "—"}</td>
-                                <td>
-                                  {!rec.exists
-                                    ? "Eksik"
-                                    : rec.matchesOrigin && rec.proxiedOk
-                                      ? "OK"
-                                      : "Güncelleme gerekli"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-            <div className="flex-row">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => syncCloudflare({ dns: true, ssl: true })}
-                disabled={cfLoading || cfSyncing || !cfStatus?.configured}
-              >
-                {cfSyncing ? "Senkronize…" : "Tam Senkron"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => syncCloudflare({ dns: true, ssl: false })}
-                disabled={cfLoading || cfSyncing || !cfStatus?.configured}
-              >
-                Sadece DNS
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => syncCloudflare({ dns: false, ssl: true })}
-                disabled={cfLoading || cfSyncing || !cfStatus?.configured}
-              >
-                Sadece SSL
-              </button>
-            </div>
+            <Link href="/security" className="btn btn-ghost">
+              IP Yönetimi →
+            </Link>
           </div>
         </>
       ) : (

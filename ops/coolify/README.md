@@ -45,9 +45,36 @@ Production traffic stays **behind Cloudflare proxy** (orange cloud). Set env on 
 
 Also set `APP_MARKETING_URL` on the **api** service (DNS host derivation).
 
-**Admin → Ayarlar → Cloudflare**: status table + manual sync (DNS / SSL / full).
+**Admin → Güvenlik → IP Yönetimi**: BetConstruct/partner IP whitelist, Cloudflare allow rules, fail2ban ignore export.
+
+Token also needs **Zone → Firewall Services → Edit** for trusted IP sync.
 
 Sync creates **A records** with **proxied=true** for hosts from `APP_MARKETING_URL`, `APP_BASE_URL`, `API_PUBLIC_URL`, `APP_PAYMENT_URL`. SSL: **Full (strict)** + **Always HTTPS**.
+
+## Trusted IPs & fail2ban
+
+**Admin → Güvenlik → IP Yönetimi** (`/security`):
+
+- Add multiple IPs/CIDRs (BetConstruct, merchant backends)
+- **API rate limit bypass** for whitelisted IPs (all routes including `/api/*`, `/user/*`)
+- **Cloudflare allow** firewall access rules per zone (via API)
+- **fail2ban ignore file** export to `FAIL2BAN_IGNORE_FILE` (default `/app/data/fail2ban/onepos-ignore.conf`)
+
+The API container **cannot** run `fail2ban-client` or SSH — it only writes the ignore file. On the Coolify host:
+
+1. Bind-mount host path into the api volume, e.g. map `/etc/fail2ban/jail.d/onepos-ignore.conf` to container `FAIL2BAN_IGNORE_FILE`, **or** cron-copy from Docker volume.
+2. In `/etc/fail2ban/jail.local` under `[DEFAULT]`:
+
+```ini
+[DEFAULT]
+ignoreip = 127.0.0.1/8 ::1
+# include OnePOS export (after panel sync):
+# ignoreip = ... (paste from generated file or use include if your fail2ban version supports it)
+```
+
+3. After panel sync: `sudo fail2ban-client reload`
+
+Env: `FAIL2BAN_IGNORE_FILE=/app/data/fail2ban/onepos-ignore.conf` (compose default).
 
 ### Manual dashboard settings (fallback)
 

@@ -12,6 +12,14 @@ import { getActivityLogs } from "../services/activity-log.js";
 import { buildSiteDepositsXlsx } from "../services/deposit-export.js";
 import { saveSiteLogo } from "../services/site-logo.js";
 import { getCloudflareStatus, isCloudflareConfigured, syncCloudflare } from "../services/cloudflare.js";
+import {
+  addTrustedIp,
+  deleteTrustedIp,
+  exportFail2banIgnoreFile,
+  listTrustedIps,
+  syncTrustedIpIntegrations,
+  updateTrustedIp,
+} from "../services/trusted-ip.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -455,6 +463,103 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       ok(reply, result as unknown as Record<string, unknown>);
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Cloudflare sync failed", 500);
+    }
+  });
+
+  app.get("/trusted_ips", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    try {
+      const items = await listTrustedIps();
+      ok(reply, {
+        items,
+        fail2ban_file: config.security.fail2banIgnoreFile || null,
+      });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Liste alınamadı", 500);
+    }
+  });
+
+  app.post("/add_trusted_ip", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    const body = request.body as Record<string, unknown>;
+    try {
+      const item = await addTrustedIp({
+        cidr: String(body.cidr ?? ""),
+        label: String(body.label ?? ""),
+        category: body.category != null ? String(body.category) : undefined,
+        skip_rate_limit: body.skip_rate_limit !== false,
+        sync_cloudflare: body.sync_cloudflare !== false,
+        note: body.note != null ? String(body.note) : undefined,
+      });
+      if (body.sync_now === true) {
+        await syncTrustedIpIntegrations();
+      }
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Eklenemedi", 400);
+    }
+  });
+
+  app.post("/update_trusted_ip", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    const body = request.body as Record<string, unknown>;
+    const id = Number(body.id);
+    if (!id) {
+      error(reply, "id gerekli", 400);
+      return;
+    }
+    try {
+      const item = await updateTrustedIp(id, {
+        cidr: body.cidr != null ? String(body.cidr) : undefined,
+        label: body.label != null ? String(body.label) : undefined,
+        category: body.category != null ? String(body.category) : undefined,
+        skip_rate_limit: body.skip_rate_limit !== undefined ? Boolean(body.skip_rate_limit) : undefined,
+        sync_cloudflare: body.sync_cloudflare !== undefined ? Boolean(body.sync_cloudflare) : undefined,
+        is_active: body.is_active !== undefined ? Boolean(body.is_active) : undefined,
+        note: body.note !== undefined ? String(body.note) : undefined,
+      });
+      if (body.sync_now === true) {
+        await syncTrustedIpIntegrations();
+      }
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Güncellenemedi", 400);
+    }
+  });
+
+  app.post("/delete_trusted_ip", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    const body = request.body as { id?: number };
+    const id = Number(body.id);
+    if (!id) {
+      error(reply, "id gerekli", 400);
+      return;
+    }
+    try {
+      await deleteTrustedIp(id);
+      try {
+        await exportFail2banIgnoreFile();
+      } catch {
+        /* optional export */
+      }
+      ok(reply, {});
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Silinemedi", 400);
+    }
+  });
+
+  app.post("/sync_trusted_ips", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    try {
+      const result = await syncTrustedIpIntegrations();
+      ok(reply, result as unknown as Record<string, unknown>);
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Senkron başarısız", 500);
     }
   });
 

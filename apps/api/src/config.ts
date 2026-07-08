@@ -133,6 +133,9 @@ export const config = {
   upload: {
     dir: envFirst("UPLOAD_DIR") ?? resolve(__dirname, "../../../data/uploads"),
   },
+  security: {
+    fail2banIgnoreFile: envFirst("FAIL2BAN_IGNORE_FILE") ?? "",
+  },
 } as const;
 
 const DEV_APP_SECRET = "dev-secret-change-in-production";

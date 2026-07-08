@@ -31,6 +31,7 @@ services:
       CLOUDFLARE_ZONE_DOMAIN_ONEKART: ${CLOUDFLARE_ZONE_DOMAIN_ONEKART:-onekart.info}
       CLOUDFLARE_ZONE_DOMAIN_ODEME: ${CLOUDFLARE_ZONE_DOMAIN_ODEME:-odeme.click}
       CLOUDFLARE_AUTO_SYNC: ${CLOUDFLARE_AUTO_SYNC:-1}
+      FAIL2BAN_IGNORE_FILE: ${FAIL2BAN_IGNORE_FILE:-/app/data/fail2ban/onepos-ignore.conf}
       BC_SECRET: ${BC_SECRET:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       PSP_DEFAULT_PROVIDER: ${PSP_DEFAULT_PROVIDER:-stripe}
@@ -45,6 +46,7 @@ services:
       SUMUP_MERCHANT_CODE: ${SUMUP_MERCHANT_CODE:-}
     volumes:
       - uploads_data:/app/data/uploads
+      - fail2ban_ignore:/app/data/fail2ban
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/health"]
       interval: 15s
@@ -86,3 +88,4 @@ networks:
 
 volumes:
   uploads_data:
+  fail2ban_ignore:

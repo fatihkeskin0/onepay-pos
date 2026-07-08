@@ -114,6 +114,12 @@ export function NavIcon({ id, active, size = 18 }: NavIconProps) {
           <path d="M12 9v4M12 17h.01" />
         </svg>
       );
+    case "adm-guvenlik":
+      return (
+        <svg {...common}>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+      );
     case "adm-duyurular":
     case "kas-duyurular":
       return (

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { getRedis } from "./redis.js";
 import { error } from "./response.js";
+import { shouldSkipRateLimit } from "./trusted-ip.js";
 
 export async function checkRateLimit(
   key: string,
@@ -53,5 +54,11 @@ export async function byIp(
   reply: Parameters<typeof error>[0],
   failClosed = true,
 ): Promise<boolean> {
-  return checkRateLimit(`ip:${getClientIp(request)}:${suffix}`, max, windowSec, reply, failClosed);
+  const clientIp = getClientIp(request);
+  try {
+    if (await shouldSkipRateLimit(clientIp)) return true;
+  } catch (err) {
+    console.error("[rate-limit] trusted-ip check failed:", err);
+  }
+  return checkRateLimit(`ip:${clientIp}:${suffix}`, max, windowSec, reply, failClosed);
 }

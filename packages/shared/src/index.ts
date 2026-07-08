@@ -53,6 +53,7 @@ export const ADMIN_NAV: NavItem[] = [
   { section: "Finans", id: "adm-giris", label: "Loglar", icon: "📋" },
   { section: "Finans", id: "adm-raporlar", label: "Raporlar", icon: "📈" },
   { section: "Güvenlik", id: "adm-supheliler", label: "Şüpheli İşlemler", icon: "⚠️", badge: "nav-badge-supheli" },
+  { section: "Güvenlik", id: "adm-guvenlik", label: "IP Yönetimi", icon: "🛡️" },
   { section: "Sistem", id: "adm-duyurular", label: "Duyurular", icon: "📢" },
   { section: "Sistem", id: "adm-ayarlar", label: "Ayarlar", icon: "⚙️" },
   { section: "Sistem", id: "adm-demo", label: "Ödeme Linki", icon: "💳" },
@@ -77,6 +78,7 @@ export const SLUG_TO_PAGE: Record<string, string> = {
   "site-reconciliation": "adm-site-mutabakat",
   reports: "adm-raporlar",
   suspicious: "adm-supheliler",
+  security: "adm-guvenlik",
 };
 
 export const PAGE_TO_SLUG: Record<string, string> = {
@@ -99,6 +101,7 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-site-mutabakat": "site-reconciliation",
   "adm-raporlar": "reports",
   "adm-supheliler": "suspicious",
+  "adm-guvenlik": "security",
   "adm-giris": "logs",
   "adm-demo": "demo",
 };
