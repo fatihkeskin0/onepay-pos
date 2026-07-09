@@ -6,10 +6,24 @@ import { Icon } from "@/components/ui/Icon";
 import { Spinner } from "@/components/ui/Spinner";
 import { StripePaymentPanel } from "@/components/pay/StripePaymentPanel";
 import { resolveBrandLogoUrl } from "@/lib/brand-logo";
-import { PayAPI, PayApiError, type PayLimits, type PaySessionInfo, type PspRenderMode } from "@/lib/pay-api";
+import { apiUrl } from "@/lib/api-base";
 
 type PayState = "entry" | "ready" | "pending" | "success" | "rejected" | "expired";
+type PspRenderMode = "redirect" | "iframe" | "stripe_elements";
 type PayTheme = "light" | "dark";
+
+interface PayLimits {
+  min: number;
+  max: number;
+}
+
+interface SessionInfo {
+  token: string;
+  amount: number;
+  user_name: string;
+  site_name: string;
+  brand: { color: string; bg: string; theme: PayTheme; logo: string | null; name: string };
+}
 
 function brandDarken(hex: string, factor = 0.82): string {
   const h = hex.replace("#", "");
@@ -52,9 +66,8 @@ export default function PayPage() {
   const params = useParams();
   const token = String(params.token ?? "");
   const [state, setState] = useState<PayState>("entry");
-  const [session, setSession] = useState<PaySessionInfo | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
   const [paymentReady, setPaymentReady] = useState(false);
-  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
   const [limits, setLimits] = useState<PayLimits | null>(null);
   const [amount, setAmount] = useState(0);
   const [depositRef, setDepositRef] = useState("");
@@ -98,22 +111,25 @@ export default function PayPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await PayAPI.getPosMethods(token);
-        setSession(data.session);
-        setPaymentReady(data.payment_ready);
-        setLimits(data.limits);
-        setUnavailableReason(data.unavailable_reason ?? null);
-        setAmount(data.session.amount);
-      } catch (e) {
-        if (e instanceof PayApiError && e.payState === "expired") {
-          setPayError(e.message);
+        const res = await fetch(apiUrl(`/user/pos_methods?token=${encodeURIComponent(token)}`));
+        const json = (await res.json()) as {
+          success: boolean;
+          message?: string;
+          data?: { session: SessionInfo; payment_ready: boolean; limits: PayLimits | null };
+        };
+        if (!json.success || !json.data) {
+          setPayError(json.message ?? "Oturum yüklenemedi");
           setState("expired");
           setProgress(100);
           return;
         }
-        setPayError(e instanceof Error ? e.message : "Oturum yüklenemedi");
+        setSession(json.data.session);
+        setPaymentReady(json.data.payment_ready);
+        setLimits(json.data.limits);
+        setAmount(json.data.session.amount);
+      } catch {
+        setPayError("Sunucuya ulaşılamıyor");
         setState("expired");
-        setProgress(100);
       } finally {
         setLoadingInit(false);
       }
@@ -123,21 +139,25 @@ export default function PayPage() {
 
   const pollStatus = useCallback(async (ref: string, tok: string) => {
     try {
-      const data = await PayAPI.getDepositStatus(ref, tok);
-      if (data.status === "approved") {
+      const res = await fetch(apiUrl(`/user/deposit_status?ref=${ref}&token=${tok}`));
+      const json = (await res.json()) as {
+        success: boolean;
+        data: { status: string; reject_reason?: string };
+      };
+      if (!json.success) return;
+      if (json.data.status === "approved") {
         setState("success");
         setProgress(100);
-      } else if (data.status === "rejected") {
+      } else if (json.data.status === "rejected") {
         setState("rejected");
-        setRejectReason(data.reject_reason ?? "");
+        setRejectReason(json.data.reject_reason ?? "");
         setProgress(100);
-      } else if (data.status === "cancelled") {
+      } else if (json.data.status === "cancelled") {
         setState("expired");
-        setPayError("Ödeme oturumunun süresi doldu veya iptal edildi.");
         setProgress(100);
       }
     } catch {
-      /* ignore polling errors */
+      /* ignore */
     }
   }, []);
 
@@ -172,7 +192,7 @@ export default function PayPage() {
 
   const startPayment = async () => {
     if (!paymentReady) {
-      setPayError(unavailableReason ?? "Ödeme altyapısı şu an kullanılamıyor");
+      setPayError("Ödeme altyapısı şu an kullanılamıyor");
       return;
     }
     if (!amount || amount <= 0) {
@@ -185,38 +205,52 @@ export default function PayPage() {
     setPayError("");
 
     try {
-      const data = await PayAPI.createDeposit(token, amount);
-      const mode = data.render_mode ?? (data.redirect_url ? "redirect" : "iframe");
-      setDepositRef(data.reference);
-      setDepositToken(data.token);
+      const res = await fetch(apiUrl("/user/create_deposit"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_token: token,
+          amount,
+        }),
+      });
+      const json = (await res.json()) as {
+        success: boolean;
+        message?: string;
+        data?: {
+          reference: string;
+          token: string;
+          amount: number;
+          redirect_url?: string | null;
+          render_mode?: PspRenderMode;
+          iframe_url?: string | null;
+          client_secret?: string | null;
+          publishable_key?: string | null;
+          provider?: string;
+        };
+      };
+      if (!json.success || !json.data) {
+        setPayError(json.message ?? "Hata");
+        setState("entry");
+        setProgress(33);
+        return;
+      }
+      const mode = json.data.render_mode ?? (json.data.redirect_url ? "redirect" : "iframe");
+      setDepositRef(json.data.reference);
+      setDepositToken(json.data.token);
       setRenderMode(mode);
-      setIframeUrl(data.iframe_url ?? null);
-      setRedirectUrl(data.redirect_url ?? null);
-      setClientSecret(data.client_secret ?? null);
-      setPublishableKey(data.publishable_key ?? null);
-      setProvider(data.provider ?? null);
+      setIframeUrl(json.data.iframe_url ?? null);
+      setRedirectUrl(json.data.redirect_url ?? null);
+      setClientSecret(json.data.client_secret ?? null);
+      setPublishableKey(json.data.publishable_key ?? null);
+      setProvider(json.data.provider ?? null);
       setState("pending");
       setProgress(78);
 
-      if (mode === "redirect" && data.redirect_url) {
-        window.location.href = data.redirect_url;
+      if (mode === "redirect" && json.data.redirect_url) {
+        window.location.href = json.data.redirect_url;
       }
-    } catch (e) {
-      if (e instanceof PayApiError) {
-        setPayError(e.message);
-        if (e.payState === "expired") {
-          setState("expired");
-          setProgress(100);
-          return;
-        }
-        if (e.payState === "pending") {
-          setState("entry");
-          setProgress(33);
-          return;
-        }
-      } else {
-        setPayError(e instanceof Error ? e.message : "Bir hata oluştu");
-      }
+    } catch {
+      setPayError("Sunucuya ulaşılamıyor");
       setState("entry");
       setProgress(33);
     }
@@ -303,7 +337,7 @@ export default function PayPage() {
 
                 {!paymentReady ? (
                   <div className="pay-alert pay-alert-error">
-                    {unavailableReason ?? "Ödeme altyapısı aktif değil. Lütfen daha sonra tekrar deneyin."}
+                    Ödeme altyapısı aktif değil. Lütfen daha sonra tekrar deneyin.
                   </div>
                 ) : null}
 

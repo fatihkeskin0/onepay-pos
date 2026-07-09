@@ -1,9 +1,9 @@
 import { apiUrl } from "@/lib/api-base";
-import { parseApiResponse, throwIfPanelApiFailed } from "@/lib/http-errors";
 
-export interface LandingInfo {
-  telegram_support_username: string | null;
-  telegram_url: string | null;
+interface PublicApiEnvelope<T> {
+  success: boolean;
+  message: string;
+  data: T;
 }
 
 async function publicRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -18,8 +18,20 @@ async function publicRequest<T>(method: string, path: string, body?: unknown): P
     throw new Error("Sunucuya ulaşılamıyor");
   }
 
-  const data = await parseApiResponse<T>(res);
-  return throwIfPanelApiFailed(res, data);
+  let data: PublicApiEnvelope<T>;
+  try {
+    data = (await res.json()) as PublicApiEnvelope<T>;
+  } catch {
+    throw new Error("Geçersiz sunucu yanıtı");
+  }
+
+  if (!data.success) throw new Error(data.message || "İstek başarısız");
+  return data.data;
+}
+
+export interface LandingInfo {
+  telegram_support_username: string | null;
+  telegram_url: string | null;
 }
 
 export const PublicAPI = {

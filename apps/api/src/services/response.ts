@@ -14,14 +14,8 @@ export function error(
   message: string,
   status = 400,
   data: unknown = null,
-  code?: string,
 ): void {
-  reply.status(status).send({
-    success: false,
-    message,
-    data,
-    ...(code ? { code } : {}),
-  });
+  reply.status(status).send({ success: false, message, data });
 }
 
 export function bcOk(reply: FastifyReply, data: Record<string, unknown>): void {

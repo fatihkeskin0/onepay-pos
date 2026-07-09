@@ -38,12 +38,3 @@ export function apiUrl(path: string): string {
     : `${API_ROUTE_PREFIX}${normalized}`;
   return `${getApiBaseUrl()}${versioned}`;
 }
-
-/** Same-origin proxy for pay page — avoids cross-origin CORS on odeme.click. */
-export function payApiUrl(path: string): string {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  const versioned = normalized.startsWith(`${API_ROUTE_PREFIX}/`)
-    ? normalized
-    : `${API_ROUTE_PREFIX}${normalized}`;
-  return `/api/backend${versioned}`;
-}

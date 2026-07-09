@@ -23,7 +23,7 @@ export async function checkRateLimit(
     if (count > max) {
       const ttl = await redis.ttl(redisKey);
       reply.header("Retry-After", String(ttl > 0 ? ttl : windowSec));
-      error(reply, "Çok fazla istek. Lütfen bekleyin.", 429, null, "RATE_LIMITED");
+      error(reply, "Çok fazla istek. Lütfen bekleyin.", 429);
       return false;
     }
 
@@ -31,7 +31,7 @@ export async function checkRateLimit(
   } catch (err) {
     console.error("[rate-limit] Redis error:", err);
     if (failClosed) {
-      error(reply, "Servis geçici olarak kullanılamıyor", 503, null, "UPSTREAM_UNAVAILABLE");
+      error(reply, "Servis geçici olarak kullanılamıyor", 503);
       return false;
     }
     return true;
