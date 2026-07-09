@@ -9,14 +9,29 @@ import { createDeposit, cancelDeposit } from "../services/payment.js";
 import { depositCancelled, depositUrl, getSiteCallback, notifyDeposit } from "../services/callback.js";
 import { byIp } from "../services/rate-limit.js";
 import {
-  getActivePosMethodForSite,
-  resolvePosProvider,
+  resolvePaymentContext,
   validateAmountForMethod,
 } from "../services/pos-methods.js";
 import { buildPspEmbedPayload, extractPspEmbedFields } from "../services/psp/embed-response.js";
 import { formatBcExpiry } from "../services/format.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
+
+function mapPspInitError(e: unknown): { message: string; status: number; code: string } {
+  const raw = e instanceof Error ? e.message : "PSP hatası";
+  if (/not configured/i.test(raw)) {
+    return {
+      message: "Ödeme altyapısı yapılandırılmamış",
+      status: 503,
+      code: "POS_NOT_CONFIGURED",
+    };
+  }
+  return {
+    message: "Ödeme sağlayıcısı geçici olarak kullanılamıyor",
+    status: 502,
+    code: "PSP_INIT_FAILED",
+  };
+}
 
 async function loadSessionByToken(token: string) {
   return prisma.paymentSession.findFirst({
@@ -126,11 +141,11 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (session.expiresAt < new Date()) {
-      error(reply, "Ödeme süresi doldu", 410);
+      error(reply, "Ödeme süresi doldu", 410, null, "SESSION_EXPIRED");
       return;
     }
 
-    const active = await getActivePosMethodForSite(Number(session.site.minDeposit));
+    const paymentCtx = await resolvePaymentContext(Number(session.site.minDeposit));
     const fixedAmount = Number(session.amount);
 
     ok(reply, {
@@ -147,8 +162,9 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           name: session.site.name,
         },
       },
-      payment_ready: active != null,
-      limits: active ? { min: active.min, max: active.max } : null,
+      payment_ready: paymentCtx != null,
+      limits: paymentCtx?.limits ?? null,
+      unavailable_reason: paymentCtx ? null : "Ödeme altyapısı yapılandırılmamış",
     });
   });
 
@@ -177,7 +193,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const session = sessionWithSite;
 
     if (session.expiresAt < new Date()) {
-      error(reply, "Ödeme süresi doldu", 410);
+      error(reply, "Ödeme süresi doldu", 410, null, "SESSION_EXPIRED");
       return;
     }
 
@@ -237,9 +253,9 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const resolved = await resolvePosProvider(null, Number(site.minDeposit));
+    const resolved = await resolvePaymentContext(Number(site.minDeposit));
     if (!resolved) {
-      error(reply, "Aktif POS yöntemi bulunamadı", 503);
+      error(reply, "Ödeme altyapısı yapılandırılmamış", 503, null, "POS_NOT_CONFIGURED");
       return;
     }
 
@@ -275,7 +291,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       if (age < 15 * 60 * 1000) {
         error(reply, "Bekleyen yatırımınız var", 409, {
           remaining_seconds: Math.ceil((15 * 60 * 1000 - age) / 1000),
-        });
+        }, "PENDING_DEPOSIT");
         return;
       }
     }
@@ -357,7 +373,8 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       });
     } catch (e) {
       await cancelDeposit(id, "PSP başlatılamadı");
-      error(reply, e instanceof Error ? e.message : "PSP hatası", 502);
+      const mapped = mapPspInitError(e);
+      error(reply, mapped.message, mapped.status, null, mapped.code);
     }
   });
 

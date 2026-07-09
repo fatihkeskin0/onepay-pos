@@ -127,4 +127,19 @@ export function validateAmountForMethod(
   return null;
 }
 
+export async function resolvePaymentContext(siteMinDeposit: number) {
+  const resolved = await resolvePosProvider(null, siteMinDeposit);
+  if (!resolved) return null;
+
+  const { method, provider } = resolved;
+  const limits = method
+    ? {
+        min: Math.max(Number(method.minAmount), siteMinDeposit),
+        max: Number(method.maxAmount),
+      }
+    : { min: siteMinDeposit, max: 100_000 };
+
+  return { method, provider, limits };
+}
+
 export { PROVIDERS };

@@ -39,6 +39,13 @@ const nextConfig = {
     API_PUBLIC_URL: process.env.API_PUBLIC_URL ?? "",
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "",
   },
+  async rewrites() {
+    const upstream =
+      process.env.DOCKER_BUILD === "1"
+        ? "http://api:80"
+        : (process.env.API_INTERNAL_URL?.replace(/\/+$/, "") || "http://localhost:4105");
+    return [{ source: "/api/backend/:path*", destination: `${upstream}/:path*` }];
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
