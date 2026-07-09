@@ -106,6 +106,15 @@ Test public URLs in the browser (through Cloudflare):
 - `https://onekart.info`
 - `https://app.onekart.info/login`
 - `https://api.onekart.info/health`
+- **Payment flow:** open a `/pay/{token}` link on `https://odeme.click` and click **Güvenli ödemeye geç** — must not show CORS errors in console
+
+Verify pay proxy (same-origin, no CORS):
+
+```sh
+curl -s -o /dev/null -w "%{http_code}" "https://odeme.click/api/backend/v1/user/deposit_status"
+```
+
+Expected: **422** (missing ref/token) — proves web → api proxy is wired.
 
 Optional **server-side** check (Traefik only, not a substitute for Cloudflare testing):
 
@@ -116,6 +125,21 @@ curl -I --max-time 15 -k -H "Host: onekart.info" https://127.0.0.1/
 Expected: **200** or **30x** — not timeout. If public URLs fail but this works, review Cloudflare SSL/proxy settings above.
 
 If domains still include `:3105` or `:4105`, remove those suffixes and redeploy.
+
+### Pay page CORS / `create_deposit` fails on `odeme.click`
+
+Customer checkout (`/pay/*`) uses a **same-origin proxy** on the web container — no extra env required:
+
+```
+odeme.click/pay/{token}  →  browser POST /api/backend/v1/user/create_deposit
+                         →  web proxies to http://api:80/v1/user/create_deposit (Docker Compose service name)
+```
+
+Works on all web domains (`onekart.info`, `app.onekart.info`, `odeme.click`) because the proxy is same-origin on whichever host serves `/pay/*`.
+
+Panel and merchant API still use `https://api.onekart.info` directly. CORS on **api** remains required for `app.onekart.info`.
+
+`static.cloudflareinsights.com ... ERR_BLOCKED_BY_CLIENT` is an ad blocker — ignore it.
 
 ### Login fails with CORS / `api.onekart.info` 504
 
@@ -128,7 +152,7 @@ curl -I https://api.onekart.info/health
 | Result | Meaning |
 |--------|---------|
 | **504** | API container down or **`api` subdomain not routed** in Coolify. Add `https://api.onekart.info` to the **api** service Domains tab (port **80**). Check Coolify logs, `DATABASE_URL`, `REDIS_URL`, migrations. |
-| **200** but browser CORS | Set `CORS_ORIGIN` on **api** to include `https://app.onekart.info`, `https://onekart.info`, `https://odeme.click` (comma-separated). |
+| **200** but browser CORS | Set `CORS_ORIGIN` on **api** to include `https://app.onekart.info`, `https://onekart.info`, `https://odeme.click` (comma-separated). Auto-merge also adds `APP_*_URL` origins when set. |
 
 `static.cloudflareinsights.com ... ERR_BLOCKED_BY_CLIENT` is an ad blocker — ignore it.
 
@@ -143,7 +167,7 @@ curl -I https://api.onekart.info/health
 | `APP_BASE_URL` | Panel app subdomain (e.g. `https://app.onekart.info`, paths like `/dashboard`) — **required** |
 | `APP_PAYMENT_URL` | Payment URL (customer `/pay/*` links) — **required** |
 | `API_PUBLIC_URL` | PSP webhook base URL — **required** |
-| `CORS_ORIGIN` | Optional comma-separated origins; defaults to marketing + panel + payment URLs |
+| `CORS_ORIGIN` | Optional comma-separated origins; auto-merged with `APP_MARKETING_URL`, `APP_BASE_URL`, `APP_PAYMENT_URL` |
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/onepara_card` — use Coolify Postgres internal hostname |
 | `REDIS_URL` | Redis connection string — use Coolify Redis internal URL |
 
@@ -184,11 +208,13 @@ docker compose -f ops/docker/compose.bundled.yaml up --build
 
 ## Architecture notes
 
-- Panel/pay browser requests and merchant integrations use `https://api.onekart.info` (`NEXT_PUBLIC_API_URL` baked at web build from `API_PUBLIC_URL`).
+- **Pay page** (any web domain `/pay/*`): browser calls same-origin `/api/backend/v1/user/*`; web hardcodes upstream `http://api:80` inside Docker Compose.
+- **Panel** (`app.onekart.info`): browser calls `https://api.onekart.info` directly (`NEXT_PUBLIC_API_URL` from `API_PUBLIC_URL` at build).
 - Merchant API: `POST https://api.onekart.info/v1/user/create_payment_link` (documented at `/docs`).
 - PSP callbacks hit **api** domain: `POST /v1/psp/{provider}/callback`.
 - Health checks: `GET /api/health` (web), `GET /health` (api — includes Redis status).
 - Rate limiting uses Redis (not DB). Audit/login/chat logs stay in PostgreSQL.
+- API errors return `{ success, message, data, code? }` — clients map `code` to user-facing messages.
 
 ## Local dev (unchanged)
 

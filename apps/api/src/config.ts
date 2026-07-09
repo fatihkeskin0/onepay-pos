@@ -66,14 +66,17 @@ function cloudflareZones(): Array<{ id: string; domain: string }> {
 
 function resolveCorsOrigins(): string | string[] {
   const explicit = envFirst("CORS_ORIGIN");
+  const autoOrigins = [panelUrl, paymentUrl, marketingUrl].filter((x): x is string => Boolean(x));
+
   if (explicit) {
     const parts = explicit.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length === 0) return panelUrl;
-    if (parts.length === 1) return parts[0] ?? panelUrl;
-    return parts;
+    const merged = [...new Set([...parts, ...autoOrigins])];
+    if (merged.length === 0) return panelUrl;
+    if (merged.length === 1) return merged[0] ?? panelUrl;
+    return merged;
   }
 
-  const origins = [...new Set([panelUrl, paymentUrl, marketingUrl].filter((x): x is string => Boolean(x)))];
+  const origins = [...new Set(autoOrigins)];
   if (origins.length <= 1) return origins[0] ?? panelUrl;
   return origins;
 }

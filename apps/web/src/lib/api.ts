@@ -1,6 +1,7 @@
 import { LS_KEYS } from "@onepara/shared";
 import { isPublicAuthPath } from "@/lib/auth-paths";
 import { apiUrl } from "@/lib/api-base";
+import { parseApiResponse, throwIfPanelApiFailed } from "@/lib/http-errors";
 
 function clearSessionKeepPreferences(): void {
   const theme = localStorage.getItem(LS_KEYS.theme);
@@ -27,12 +28,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error("Sunucuya ulaşılamıyor");
   }
 
-  let data: { success: boolean; message: string; data: T };
-  try {
-    data = (await res.json()) as { success: boolean; message: string; data: T };
-  } catch {
-    throw new Error(res.ok ? "Geçersiz sunucu yanıtı" : "İstek başarısız");
-  }
+  const data = await parseApiResponse<T>(res);
 
   if (res.status === 401) {
     if (token && !publicAuth) {
@@ -46,8 +42,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(data.message || "Bu işlem için yetkiniz yok");
   }
 
-  if (!data.success) throw new Error(data.message || "İstek başarısız");
-  return data.data;
+  return throwIfPanelApiFailed(res, data);
 }
 
 export const API = {
@@ -76,7 +71,7 @@ export const API = {
     if (!res.ok) {
       let message = "İndirme başarısız";
       try {
-        const data = (await res.json()) as { message?: string };
+        const data = await parseApiResponse(res);
         if (data.message) message = data.message;
       } catch {
         /* ignore */
