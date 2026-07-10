@@ -5,6 +5,8 @@ export interface TokenPayload {
   role: PanelRole;
   site_id?: number;
   tv?: number;
+  ip?: string;
+  sid?: string;
   exp: number;
 }
 

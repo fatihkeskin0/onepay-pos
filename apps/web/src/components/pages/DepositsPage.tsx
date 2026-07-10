@@ -6,6 +6,7 @@ import { API } from "@/lib/api";
 import { panelHref } from "@/lib/panel-routes";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
+import { StepUpModal } from "@/components/auth/StepUpModal";
 import { useClientSession } from "@/hooks/useClientSession";
 
 interface Deposit {
@@ -45,6 +46,25 @@ export default function DepositsPage() {
 
   const [rejectModal, setRejectModal] = useState<{ id: number; reason: string } | null>(null);
   const [editModal, setEditModal] = useState<{ id: number; amount: string; logs: EditLog[] } | null>(null);
+
+  const [stepUp, setStepUp] = useState<{
+    title: string;
+    run: (totpCode: string) => Promise<void>;
+  } | null>(null);
+  const [stepUpLoading, setStepUpLoading] = useState(false);
+
+  const executeStepUp = async (totpCode: string) => {
+    if (!stepUp) return;
+    setStepUpLoading(true);
+    try {
+      await stepUp.run(totpCode);
+      setStepUp(null);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Hata", "error");
+    } finally {
+      setStepUpLoading(false);
+    }
+  };
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -89,26 +109,47 @@ export default function DepositsPage() {
     void load(tab, page);
   };
 
-  const approve = async (id: number) => {
-    try {
-      await API.post("/cashier/approve_deposit", { id });
-      notify("Onaylandı", "success");
-      reload();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+  const approve = (id: number) => {
+    setStepUp({
+      title: "Yatırımı onayla",
+      run: async (totpCode) => {
+        await API.post("/cashier/approve_deposit", { id, totp_code: totpCode });
+        notify("Onaylandı", "success");
+        reload();
+      },
+    });
   };
 
-  const submitReject = async () => {
+  const requestReject = () => {
     if (!rejectModal) return;
-    try {
-      await API.post("/cashier/reject_deposit", { id: rejectModal.id, reason: rejectModal.reason });
-      notify("Reddedildi", "success");
-      setRejectModal(null);
-      reload();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+    const { id, reason } = rejectModal;
+    setRejectModal(null);
+    setStepUp({
+      title: "Yatırımı reddet",
+      run: async (totpCode) => {
+        await API.post("/cashier/reject_deposit", { id, reason, totp_code: totpCode });
+        notify("Reddedildi", "success");
+        reload();
+      },
+    });
+  };
+
+  const requestEditAmount = () => {
+    if (!editModal) return;
+    const { id, amount } = editModal;
+    setStepUp({
+      title: "Tutar güncelle",
+      run: async (totpCode) => {
+        await API.post("/admin/update_deposit_amount", {
+          id,
+          amount: Number(amount),
+          totp_code: totpCode,
+        });
+        notify("Tutar güncellendi", "success");
+        setEditModal(null);
+        reload();
+      },
+    });
   };
 
   const openEditModal = async (id: number, currentAmount: string) => {
@@ -117,21 +158,6 @@ export default function DepositsPage() {
       setEditModal({ id, amount: currentAmount, logs: data.items });
     } catch {
       setEditModal({ id, amount: currentAmount, logs: [] });
-    }
-  };
-
-  const submitEditAmount = async () => {
-    if (!editModal) return;
-    try {
-      await API.post("/admin/update_deposit_amount", {
-        id: editModal.id,
-        amount: Number(editModal.amount),
-      });
-      notify("Tutar güncellendi", "success");
-      setEditModal(null);
-      reload();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
     }
   };
 
@@ -289,7 +315,7 @@ export default function DepositsPage() {
             <button type="button" className="btn btn-ghost" onClick={() => setRejectModal(null)}>
               İptal
             </button>
-            <button type="button" className="btn btn-danger" onClick={submitReject}>
+            <button type="button" className="btn btn-danger" onClick={requestReject}>
               Reddet
             </button>
           </>
@@ -315,7 +341,7 @@ export default function DepositsPage() {
             <button type="button" className="btn btn-ghost" onClick={() => setEditModal(null)}>
               İptal
             </button>
-            <button type="button" className="btn btn-primary" onClick={submitEditAmount}>
+            <button type="button" className="btn btn-primary" onClick={requestEditAmount}>
               Kaydet
             </button>
           </>
@@ -358,6 +384,14 @@ export default function DepositsPage() {
           </div>
         )}
       </Modal>
+
+      <StepUpModal
+        open={stepUp !== null}
+        title={stepUp?.title}
+        loading={stepUpLoading}
+        onClose={() => setStepUp(null)}
+        onConfirm={executeStepUp}
+      />
     </>
   );
 }

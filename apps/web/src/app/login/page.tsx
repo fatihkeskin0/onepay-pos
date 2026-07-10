@@ -15,13 +15,17 @@ const TRUST = [
   { icon: "card" as const, label: "Kart ödemesi" },
 ];
 
+type LoginStep = "password" | "2fa" | "setup";
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"password" | "2fa">("password");
+  const [step, setStep] = useState<LoginStep>("password");
   const [partialToken, setPartialToken] = useState("");
+  const [setupSecret, setSetupSecret] = useState("");
+  const [setupQr, setSetupQr] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +53,15 @@ export default function LoginPage() {
     router.push("/dashboard");
   };
 
+  const loadSetup = async (token: string) => {
+    const data = await API.post<{ secret: string; qr: string }>("/cashier/onboarding/setup", {
+      partial_token: token,
+    });
+    setSetupSecret(data.secret);
+    setSetupQr(data.qr);
+    setCode("");
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -61,24 +74,21 @@ export default function LoginPage() {
         theme?: string;
         log_id?: number;
         requires_2fa?: boolean;
+        requires_2fa_setup?: boolean;
         partial_token?: string;
       }>("/cashier/login", { username: username.trim(), password });
+
+      if (data.requires_2fa_setup && data.partial_token) {
+        setPartialToken(data.partial_token);
+        setStep("setup");
+        await loadSetup(data.partial_token);
+        return;
+      }
 
       if (data.requires_2fa && data.partial_token) {
         setPartialToken(data.partial_token);
         setStep("2fa");
         setCode("");
-        return;
-      }
-
-      if (data.token && data.role && data.username) {
-        finishLogin({
-          token: data.token,
-          role: data.role,
-          username: data.username,
-          theme: data.theme,
-          log_id: data.log_id,
-        });
         return;
       }
 
@@ -110,12 +120,44 @@ export default function LoginPage() {
     }
   };
 
+  const handleSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const data = await API.post<{
+        token: string;
+        role: string;
+        username: string;
+        theme?: string;
+        log_id?: number;
+      }>("/cashier/onboarding/verify", { partial_token: partialToken, code: code.trim() });
+      finishLogin(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Doğrulama kodu geçersiz");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const backToPassword = () => {
     setStep("password");
     setCode("");
     setPartialToken("");
+    setSetupSecret("");
+    setSetupQr("");
     setError("");
   };
+
+  const stepTitle =
+    step === "password" ? "Giriş yap" : step === "2fa" ? "Doğrulama kodu" : "2FA kurulumu";
+
+  const stepLead =
+    step === "password"
+      ? "Panel erişimi için hesap bilgilerinizi girin."
+      : step === "2fa"
+        ? "Authenticator uygulamanızdaki 6 haneli kodu girin."
+        : "Google Authenticator veya benzeri bir uygulama ile QR kodu tarayın, ardından kodu girin.";
 
   return (
     <div className="login-page">
@@ -137,16 +179,12 @@ export default function LoginPage() {
           <div className="login-card-top">
             <div className="login-step-dots" aria-hidden>
               <span className={step === "password" ? "is-active" : "is-done"} />
-              <span className={step === "2fa" ? "is-active" : ""} />
+              <span className={step !== "password" ? "is-active" : ""} />
             </div>
             <h1 id="login-heading" className="login-title">
-              {step === "password" ? "Giriş yap" : "Doğrulama kodu"}
+              {stepTitle}
             </h1>
-            <p className="login-lead">
-              {step === "password"
-                ? "Panel erişimi için hesap bilgilerinizi girin."
-                : "Authenticator uygulamanızdaki 6 haneli kodu girin."}
-            </p>
+            <p className="login-lead">{stepLead}</p>
           </div>
 
           {error ? <AuthAlert message={error} /> : null}
@@ -180,7 +218,7 @@ export default function LoginPage() {
                 Devam et
               </Button>
             </form>
-          ) : (
+          ) : step === "2fa" ? (
             <form onSubmit={handle2fa} className="login-form" noValidate>
               <AuthField
                 label="6 haneli kod"
@@ -196,6 +234,35 @@ export default function LoginPage() {
               />
               <Button type="submit" variant="primary" loading={loading} className="login-submit">
                 Doğrula
+              </Button>
+              <button type="button" className="login-link-btn" onClick={backToPassword} disabled={loading}>
+                ← Farklı hesap
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSetup} className="login-form" noValidate>
+              {setupQr ? (
+                <div className="qr-wrap">
+                  <img src={setupQr} alt="2FA QR" width={180} height={180} />
+                </div>
+              ) : null}
+              {setupSecret ? (
+                <p className="settings-secret">Secret: {setupSecret}</p>
+              ) : null}
+              <AuthField
+                label="6 haneli kod"
+                fieldType="otp"
+                name="code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                disabled={loading}
+              />
+              <Button type="submit" variant="primary" loading={loading} className="login-submit">
+                Kurulumu tamamla
               </Button>
               <button type="button" className="login-link-btn" onClick={backToPassword} disabled={loading}>
                 ← Farklı hesap

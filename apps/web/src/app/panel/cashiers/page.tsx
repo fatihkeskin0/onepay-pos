@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal, ConfirmModal } from "@/components/Modal";
+import { StepUpModal } from "@/components/auth/StepUpModal";
 
 interface Cashier {
   id: number;
@@ -59,6 +60,25 @@ export default function CashiersPage() {
     onConfirm: () => void;
   } | null>(null);
 
+  const [stepUp, setStepUp] = useState<{
+    title: string;
+    run: (totpCode: string) => Promise<void>;
+  } | null>(null);
+  const [stepUpLoading, setStepUpLoading] = useState(false);
+
+  const executeStepUp = async (totpCode: string) => {
+    if (!stepUp) return;
+    setStepUpLoading(true);
+    try {
+      await stepUp.run(totpCode);
+      setStepUp(null);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Hata", "error");
+    } finally {
+      setStepUpLoading(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try {
@@ -75,21 +95,23 @@ export default function CashiersPage() {
     load();
   }, []);
 
-  const submitAdd = async () => {
-    try {
-      await API.post("/admin/add_cashier", {
-        username: addForm.username,
-        password: addForm.password,
-        role: addForm.role,
-        commission_rate: Number(addForm.commission_rate),
-      });
-      notify("Agent eklendi", "success");
-      setAddOpen(false);
-      setAddForm({ username: "", password: "", role: "kasiyer", commission_rate: "5" });
-      load();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+  const requestAdd = () => {
+    setStepUp({
+      title: "Agent ekle",
+      run: async (totpCode) => {
+        await API.post("/admin/add_cashier", {
+          username: addForm.username,
+          password: addForm.password,
+          role: addForm.role,
+          commission_rate: Number(addForm.commission_rate),
+          totp_code: totpCode,
+        });
+        notify("Agent eklendi", "success");
+        setAddOpen(false);
+        setAddForm({ username: "", password: "", role: "kasiyer", commission_rate: "5" });
+        load();
+      },
+    });
   };
 
   const openEdit = (c: Cashier) => {
@@ -124,43 +146,50 @@ export default function CashiersPage() {
     setConfirmAction({
       title: c.isActive ? "Pasife Al" : "Aktifleştir",
       message: `${c.username} hesabını ${c.isActive ? "pasife almak" : "aktifleştirmek"} istiyor musunuz?`,
-      onConfirm: async () => {
-        try {
-          await API.post("/admin/toggle_cashier", { id: c.id });
-          notify("Durum güncellendi", "success");
-          load();
-        } catch (e) {
-          notify(e instanceof Error ? e.message : "Hata", "error");
-        }
+      onConfirm: () => {
         setConfirmAction(null);
+        setStepUp({
+          title: c.isActive ? "Pasife al" : "Aktifleştir",
+          run: async (totpCode) => {
+            await API.post("/admin/toggle_cashier", { id: c.id, totp_code: totpCode });
+            notify("Durum güncellendi", "success");
+            load();
+          },
+        });
       },
     });
   };
 
-  const submitResetPassword = async () => {
+  const requestResetPassword = () => {
     if (!resetTarget) return;
-    try {
-      await API.post("/admin/update_cashier", { id: resetTarget.id, password: newPassword });
-      notify("Şifre sıfırlandı", "success");
-      setResetTarget(null);
-      setNewPassword("");
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+    setStepUp({
+      title: "Şifre sıfırla",
+      run: async (totpCode) => {
+        await API.post("/admin/update_cashier", {
+          id: resetTarget.id,
+          password: newPassword,
+          totp_code: totpCode,
+        });
+        notify("Şifre sıfırlandı", "success");
+        setResetTarget(null);
+        setNewPassword("");
+      },
+    });
   };
 
   const forceLogout = (c: Cashier) => {
     setConfirmAction({
       title: "Çıkış Yaptır",
       message: `${c.username} oturumunu sonlandırmak istiyor musunuz?`,
-      onConfirm: async () => {
-        try {
-          await API.post("/admin/force_logout", { id: c.id });
-          notify("Oturum sonlandırıldı", "success");
-        } catch (e) {
-          notify(e instanceof Error ? e.message : "Hata", "error");
-        }
+      onConfirm: () => {
         setConfirmAction(null);
+        setStepUp({
+          title: "Oturumu sonlandır",
+          run: async (totpCode) => {
+            await API.post("/admin/force_logout", { id: c.id, totp_code: totpCode });
+            notify("Oturum sonlandırıldı", "success");
+          },
+        });
       },
     });
   };
@@ -240,7 +269,7 @@ export default function CashiersPage() {
             <button type="button" className="btn btn-ghost" onClick={() => setAddOpen(false)}>
               İptal
             </button>
-            <button type="button" className="btn btn-primary" onClick={submitAdd}>
+            <button type="button" className="btn btn-primary" onClick={requestAdd}>
               Ekle
             </button>
           </>
@@ -349,7 +378,7 @@ export default function CashiersPage() {
             <button type="button" className="btn btn-ghost" onClick={() => setResetTarget(null)}>
               İptal
             </button>
-            <button type="button" className="btn btn-primary" onClick={submitResetPassword}>
+            <button type="button" className="btn btn-primary" onClick={requestResetPassword}>
               Sıfırla
             </button>
           </>
@@ -372,6 +401,14 @@ export default function CashiersPage() {
         message={confirmAction?.message ?? ""}
         onConfirm={() => confirmAction?.onConfirm()}
         onCancel={() => setConfirmAction(null)}
+      />
+
+      <StepUpModal
+        open={stepUp !== null}
+        title={stepUp?.title}
+        loading={stepUpLoading}
+        onClose={() => setStepUp(null)}
+        onConfirm={executeStepUp}
       />
     </>
   );

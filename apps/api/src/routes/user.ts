@@ -7,7 +7,7 @@ import { requireSite } from "../services/site-auth.js";
 import { ok, error } from "../services/response.js";
 import { createDeposit, cancelDeposit } from "../services/payment.js";
 import { depositCancelled, depositUrl, getSiteCallback, notifyDeposit } from "../services/callback.js";
-import { byIp } from "../services/rate-limit.js";
+import { byIp, getClientIp } from "../services/rate-limit.js";
 import {
   resolvePaymentContext,
   validateAmountForMethod,
@@ -28,7 +28,7 @@ function mapPspInitError(e: unknown): { message: string; status: number; code: s
   }
   return {
     message: "Ödeme sağlayıcısı geçici olarak kullanılamıyor",
-    status: 502,
+    status: 503,
     code: "PSP_INIT_FAILED",
   };
 }
@@ -239,7 +239,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       ok(reply, {
         reference: locked.deposit.reference,
         token: locked.deposit.token,
-        amount: locked.deposit.amount,
+        amount: Number(locked.deposit.amount),
         provider: locked.deposit.pspProvider,
         ...embed,
       });
@@ -314,7 +314,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         siteName: site.name,
         returnUrl: session.returnUrl || `${config.app.paymentUrl}/pay/${sessionToken}`,
         callbackUrl: `${config.api.publicUrl}${API_ROUTE_PREFIX}/psp/${provider.name}/callback`,
-        userIp: request.ip ?? "127.0.0.1",
+        userIp: getClientIp(request),
         email: `${userId}@${site.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "site"}.pay`,
       });
 
@@ -372,7 +372,11 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         publishable_key: pspResult.publishableKey ?? null,
       });
     } catch (e) {
-      await cancelDeposit(id, "PSP başlatılamadı");
+      try {
+        await cancelDeposit(id, "PSP başlatılamadı");
+      } catch (cancelErr) {
+        console.error("[create_deposit] cancelDeposit failed:", cancelErr);
+      }
       const mapped = mapPspInitError(e);
       error(reply, mapped.message, mapped.status, null, mapped.code);
     }

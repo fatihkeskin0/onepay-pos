@@ -1,14 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@onepara/db";
 import {
-  generateToken,
   requireAuth,
+  requireStepUp,
   hashPassword,
   checkPassword,
-} from "../services/auth.js";
+  completeLoginSession,
+  makePartialToken,
+  verifyPartialToken,
+  verifyTotp,
+  generateSecret,
+  getQrDataUrl,
+} from "../auth/index.js";
 import { ok, error } from "../services/response.js";
-import { byIp } from "../services/rate-limit.js";
-import { makePartialToken, verifyPartialToken, verifyTotp, generateSecret, getQrDataUrl } from "../services/totp.js";
+import { byIp, getClientIp } from "../services/rate-limit.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
 import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
@@ -29,35 +34,80 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    if (cashier.totpEnabled && cashier.totpSecret) {
+    const partialToken = makePartialToken(cashier.id);
+
+    if (!cashier.totpEnabled) {
       ok(reply, {
-        requires_2fa: true,
-        partial_token: makePartialToken(cashier.id),
+        requires_2fa_setup: true,
+        partial_token: partialToken,
       });
       return;
     }
 
-    const log = await prisma.loginLog.create({
-      data: {
-        cashierId: cashier.id,
-        username: cashier.username,
-        role: cashier.role,
-        ip: request.ip ?? "",
-      },
+    ok(reply, {
+      requires_2fa: true,
+      partial_token: partialToken,
     });
+  });
+
+  app.post("/onboarding/setup", async (request, reply) => {
+    if (!(await byIp(request, "onboarding", 10, 60, reply))) return;
+
+    const partialToken = String((request.body as { partial_token?: string }).partial_token ?? "");
+    const cashierId = verifyPartialToken(partialToken);
+    if (!cashierId) {
+      error(reply, "Oturum süresi doldu", 401);
+      return;
+    }
+
+    const cashier = await prisma.cashier.findUnique({ where: { id: cashierId } });
+    if (!cashier?.isActive) {
+      error(reply, "Hesap bulunamadı", 401);
+      return;
+    }
+    if (cashier.totpEnabled) {
+      error(reply, "2FA zaten etkin", 409);
+      return;
+    }
+
+    const secret = generateSecret();
+    await prisma.cashier.update({ where: { id: cashier.id }, data: { totpSecret: secret } });
+    const qr = await getQrDataUrl(secret, cashier.username);
+    ok(reply, { secret, qr });
+  });
+
+  app.post("/onboarding/verify", async (request, reply) => {
+    if (!(await byIp(request, "onboarding", 10, 60, reply))) return;
+
+    const body = request.body as { partial_token?: string; code?: string };
+    const cashierId = verifyPartialToken(String(body.partial_token ?? ""));
+    if (!cashierId) {
+      error(reply, "Oturum süresi doldu", 401);
+      return;
+    }
+
+    const cashier = await prisma.cashier.findUnique({ where: { id: cashierId } });
+    if (!cashier?.isActive || !cashier.totpSecret) {
+      error(reply, "Kurulum bulunamadı", 401);
+      return;
+    }
+    if (cashier.totpEnabled) {
+      error(reply, "2FA zaten etkin", 409);
+      return;
+    }
+    if (!verifyTotp(cashier.totpSecret, String(body.code ?? ""))) {
+      error(reply, "Geçersiz kod", 401);
+      return;
+    }
 
     await prisma.cashier.update({
       where: { id: cashier.id },
-      data: { lastLogin: new Date() },
+      data: { totpEnabled: true },
     });
 
-    ok(reply, {
-      token: generateToken(cashier.id, cashier.role, cashier.siteId, cashier.tokenVersion),
-      role: cashier.role,
-      username: cashier.username,
-      theme: cashier.theme,
-      log_id: log.id,
-    });
+    const clientIp = getClientIp(request);
+    const session = await completeLoginSession(cashier, clientIp);
+    ok(reply, { ...session });
   });
 
   app.post("/verify_2fa", async (request, reply) => {
@@ -70,22 +120,18 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const cashier = await prisma.cashier.findUnique({ where: { id: cashierId } });
-    if (!cashier?.totpSecret || !verifyTotp(cashier.totpSecret, String(body.code ?? ""))) {
+    if (!cashier?.isActive || !cashier.totpEnabled || !cashier.totpSecret) {
+      error(reply, "2FA kurulumu gerekli", 403, null, "TOTP_REQUIRED");
+      return;
+    }
+    if (!verifyTotp(cashier.totpSecret, String(body.code ?? ""))) {
       error(reply, "Geçersiz kod", 401);
       return;
     }
 
-    const log = await prisma.loginLog.create({
-      data: { cashierId: cashier.id, username: cashier.username, role: cashier.role, ip: request.ip ?? "" },
-    });
-
-    ok(reply, {
-      token: generateToken(cashier.id, cashier.role, cashier.siteId, cashier.tokenVersion),
-      role: cashier.role,
-      username: cashier.username,
-      theme: cashier.theme,
-      log_id: log.id,
-    });
+    const clientIp = getClientIp(request);
+    const session = await completeLoginSession(cashier, clientIp);
+    ok(reply, { ...session });
   });
 
   app.post("/logout", async (request, reply) => {
@@ -139,7 +185,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/approve_deposit", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
 
     const body = request.body as { id?: number };
     const depositId = Number(body.id);
@@ -169,7 +215,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/reject_deposit", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
 
     const body = request.body as { id?: number; reason?: string };
     const depositId = Number(body.id);
@@ -277,56 +323,10 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
     ok(reply, { theme });
   });
 
-  app.get("/get_2fa_status", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
-    const c = await prisma.cashier.findUnique({ where: { id: user.id } });
-    ok(reply, { enabled: c?.totpEnabled ?? false });
-  });
-
-  app.post("/setup_2fa", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
-    const c = await prisma.cashier.findUnique({ where: { id: user.id } });
-    if (!c) return;
-    const secret = generateSecret();
-    await prisma.cashier.update({ where: { id: c.id }, data: { totpSecret: secret } });
-    const qr = await getQrDataUrl(secret, c.username);
-    ok(reply, { secret, qr });
-  });
-
-  app.post("/enable_2fa", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
-    const code = String((request.body as { code?: string }).code ?? "");
-    const c = await prisma.cashier.findUnique({ where: { id: user.id } });
-    if (!c?.totpSecret || !verifyTotp(c.totpSecret, code)) {
-      error(reply, "Geçersiz kod", 422);
-      return;
-    }
-    await prisma.cashier.update({ where: { id: c.id }, data: { totpEnabled: true } });
-    ok(reply, { enabled: true });
-  });
-
-  app.post("/disable_2fa", async (request, reply) => {
-    const user = await requireAuth(request, reply, "kasiyer", "admin");
-    if (!user) return;
-    const password = String((request.body as { password?: string }).password ?? "");
-    const c = await prisma.cashier.findUnique({ where: { id: user.id } });
-    if (!c || !(await checkPassword(password, c.passwordHash))) {
-      error(reply, "Şifre hatalı", 401);
-      return;
-    }
-    await prisma.cashier.update({
-      where: { id: c.id },
-      data: { totpEnabled: false, totpSecret: null },
-    });
-    ok(reply, { enabled: false });
-  });
-
   app.post("/change_password", async (request, reply) => {
     const user = await requireAuth(request, reply, "kasiyer", "admin");
     if (!user || !(await byIp(request, "pwd", 5, 300, reply))) return;
+    if (!(await requireStepUp(request, reply, user.id))) return;
 
     const body = request.body as { old_password?: string; new_password?: string };
     const c = await prisma.cashier.findUnique({ where: { id: user.id } });

@@ -46,7 +46,7 @@ export class PayApiError extends ApiRequestError {
   constructor(message: string, status: number, code?: ApiErrorCode, data: unknown = null) {
     super(message, status, code, data);
     this.name = "PayApiError";
-    if (code === "POS_NOT_CONFIGURED" || status === 503) {
+    if (code === "POS_NOT_CONFIGURED") {
       this.payState = "infrastructure";
     } else if (code === "PSP_INIT_FAILED" || status === 502) {
       this.payState = "provider";

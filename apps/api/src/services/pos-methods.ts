@@ -22,9 +22,13 @@ export async function invalidatePosMethodsCache(): Promise<void> {
 export function isProviderConfigured(provider: string): boolean {
   switch (provider) {
     case "paytr":
-      return !!(config.psp.paytr.merchantId && config.psp.paytr.merchantKey);
+      return !!(
+        config.psp.paytr.merchantId &&
+        config.psp.paytr.merchantKey &&
+        config.psp.paytr.merchantSalt
+      );
     case "stripe":
-      return !!config.psp.stripe.secretKey;
+      return !!(config.psp.stripe.secretKey && config.psp.stripe.publishableKey);
     case "sumup":
       return !!config.psp.sumup.apiKey;
     default:

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
+import { StepUpModal } from "@/components/auth/StepUpModal";
 
 interface PosMethod {
   id: number;
@@ -38,6 +39,25 @@ export default function PosSettingsPage() {
   });
   const { notify } = useToast();
 
+  const [stepUp, setStepUp] = useState<{
+    title: string;
+    run: (totpCode: string) => Promise<void>;
+  } | null>(null);
+  const [stepUpLoading, setStepUpLoading] = useState(false);
+
+  const executeStepUp = async (totpCode: string) => {
+    if (!stepUp) return;
+    setStepUpLoading(true);
+    try {
+      await stepUp.run(totpCode);
+      setStepUp(null);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Hata", "error");
+    } finally {
+      setStepUpLoading(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try {
@@ -65,33 +85,36 @@ export default function PosSettingsPage() {
     });
   };
 
-  const submitEdit = async () => {
+  const requestSave = () => {
     if (!editTarget) return;
-    try {
-      await API.post("/admin/save_pos_method", {
-        provider: editTarget.provider,
-        label: editForm.label,
-        enabled: editForm.enabled,
-        min_amount: Number(editForm.min_amount),
-        max_amount: Number(editForm.max_amount),
-        sort_order: Number(editForm.sort_order),
-      });
-      notify("Kaydedildi", "success");
-      setEditTarget(null);
-      load();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+    setStepUp({
+      title: "POS ayarlarını kaydet",
+      run: async (totpCode) => {
+        await API.post("/admin/save_pos_method", {
+          provider: editTarget.provider,
+          label: editForm.label,
+          enabled: editForm.enabled,
+          min_amount: Number(editForm.min_amount),
+          max_amount: Number(editForm.max_amount),
+          sort_order: Number(editForm.sort_order),
+          totp_code: totpCode,
+        });
+        notify("Kaydedildi", "success");
+        setEditTarget(null);
+        load();
+      },
+    });
   };
 
-  const toggleMethod = async (provider: string) => {
-    try {
-      await API.post("/admin/toggle_pos_method", { provider });
-      notify("Durum güncellendi", "success");
-      load();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    }
+  const requestToggle = (provider: string) => {
+    setStepUp({
+      title: "POS durumunu değiştir",
+      run: async (totpCode) => {
+        await API.post("/admin/toggle_pos_method", { provider, totp_code: totpCode });
+        notify("Durum güncellendi", "success");
+        load();
+      },
+    });
   };
 
   return (
@@ -141,7 +164,7 @@ export default function PosSettingsPage() {
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(m)}>
                       Düzenle
                     </button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => toggleMethod(m.provider)}>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => requestToggle(m.provider)}>
                       {m.enabled ? "Pasif yap" : "Aktif yap"}
                     </button>
                   </td>
@@ -161,7 +184,7 @@ export default function PosSettingsPage() {
             <button type="button" className="btn btn-ghost" onClick={() => setEditTarget(null)}>
               İptal
             </button>
-            <button type="button" className="btn btn-primary" onClick={submitEdit}>
+            <button type="button" className="btn btn-primary" onClick={requestSave}>
               Kaydet
             </button>
           </>
@@ -220,6 +243,14 @@ export default function PosSettingsPage() {
           </p>
         )}
       </Modal>
+
+      <StepUpModal
+        open={stepUp !== null}
+        title={stepUp?.title}
+        loading={stepUpLoading}
+        onClose={() => setStepUp(null)}
+        onConfirm={executeStepUp}
+      />
     </>
   );
 }

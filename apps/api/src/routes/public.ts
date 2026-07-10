@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@onepara/db";
 import { ok, error } from "../services/response.js";
-import { byIp } from "../services/rate-limit.js";
+import { byIp, getClientIp } from "../services/rate-limit.js";
 import { getSetting } from "../services/callback.js";
 import { isValidTelegramUsername, normalizeTelegramUsername } from "../services/telegram-username.js";
 
@@ -48,10 +48,7 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const ip =
-      (request.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
-      request.ip ??
-      "";
+    const ip = getClientIp(request);
 
     await prisma.merchantApplication.create({
       data: {

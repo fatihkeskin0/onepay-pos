@@ -9,6 +9,11 @@ export type ApiErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "NOT_FOUND"
+  | "IP_CHANGED"
+  | "STEP_UP_REQUIRED"
+  | "SESSION_SUPERSEDED"
+  | "SESSION_INVALID"
+  | "TOTP_REQUIRED"
   | string;
 
 export interface ApiEnvelope<T = unknown> {
@@ -37,10 +42,8 @@ export async function parseApiResponse<T>(res: Response): Promise<ApiEnvelope<T>
   try {
     data = (await res.json()) as ApiEnvelope<T>;
   } catch {
-    throw new ApiRequestError(
-      res.ok ? "Geçersiz sunucu yanıtı" : "İstek başarısız",
-      res.status,
-    );
+    const fallback = mapPayError(res.status, "", undefined);
+    throw new ApiRequestError(res.ok ? "Geçersiz sunucu yanıtı" : fallback, res.status);
   }
   return data;
 }
@@ -83,6 +86,21 @@ export function mapPayError(status: number, message: string, code?: ApiErrorCode
 }
 
 export function mapPanelError(status: number, message: string, code?: ApiErrorCode): string {
+  if (code === "IP_CHANGED") {
+    return "IP adresi değişti, oturum sonlandırıldı";
+  }
+  if (code === "SESSION_SUPERSEDED") {
+    return "Başka bir cihazda oturum açıldı";
+  }
+  if (code === "SESSION_INVALID") {
+    return "Oturum geçersiz, lütfen tekrar giriş yapın";
+  }
+  if (code === "TOTP_REQUIRED") {
+    return "2FA kurulumu gerekli";
+  }
+  if (code === "STEP_UP_REQUIRED") {
+    return "2FA doğrulaması gerekli";
+  }
   if (code === "RATE_LIMITED" || status === 429) {
     return message || "Çok fazla istek. Lütfen bekleyin.";
   }

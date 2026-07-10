@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@onepara/db";
-import { requireAuth, hashPassword, generateApiKey } from "../services/auth.js";
+import { requireAuth, hashPassword, generateApiKey, requireStepUp } from "../services/auth.js";
 import { ok, error } from "../services/response.js";
 import { config } from "../config.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
@@ -177,7 +177,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/add_cashier", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const body = request.body as Record<string, unknown>;
     const cashier = await prisma.cashier.create({
       data: {
@@ -194,6 +194,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
     const body = request.body as Record<string, unknown>;
+    if (body.password && !(await requireStepUp(request, reply, user.id))) return;
     const id = Number(body.id);
     const data: Record<string, unknown> = {};
     if (body.commission_rate != null) data.commissionRate = Number(body.commission_rate);
@@ -207,7 +208,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/toggle_cashier", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const id = Number((request.body as { id?: number }).id);
     const c = await prisma.cashier.findUnique({ where: { id } });
     if (!c) {
@@ -220,7 +221,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/force_logout", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const id = Number((request.body as { id?: number }).id);
     await prisma.cashier.update({ where: { id }, data: { tokenVersion: { increment: 1 } } });
     ok(reply, {});
@@ -255,7 +256,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/update_deposit_amount", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const body = request.body as { id?: number; amount?: number };
     const deposit = await prisma.deposit.findUnique({ where: { id: Number(body.id) } });
     if (!deposit) {
@@ -768,7 +769,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/save_pos_method", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const body = request.body as {
       provider?: string;
       label?: string;
@@ -820,7 +821,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/toggle_pos_method", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
-    if (!user) return;
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const provider = String((request.body as { provider?: string }).provider ?? "");
     const method = await prisma.posMethod.findUnique({ where: { provider } });
     if (!method) {
