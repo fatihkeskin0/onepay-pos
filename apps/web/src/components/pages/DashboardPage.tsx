@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { API } from "@/lib/api";
@@ -121,7 +121,8 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DashboardDateRange>(todayRange);
   const [rangeReady, setRangeReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { ready, username, isAdmin } = useClientSession();
+  const { ready, username, isAdmin, badges } = useClientSession();
+  const pollInFlight = useRef(false);
   const { combinedLabel: clockLabel } = useClientClock();
 
   useEffect(() => {
@@ -137,36 +138,38 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!ready || !rangeReady) return;
-    setLoading(true);
+
     const load = async () => {
+      if (pollInFlight.current || document.hidden) return;
+      pollInFlight.current = true;
+      setLoading(true);
       try {
         const endpoint = isAdmin ? "/admin/dashboard" : "/cashier/stats";
         const dateQuery = `from=${dateRange.from}&to=${dateRange.to}`;
-        const [dash, hourly, badges, status] = await Promise.all([
+        const [dash, hourly, status] = await Promise.all([
           API.get<DashboardData>(`${endpoint}?${dateQuery}`),
           API.get<{ hours: HourSlot[]; date: string }>(`/cashier/hourly_stats?${dateQuery}`).catch(() => ({
             hours: [],
             date: dateRange.to,
           })),
-          isAdmin
-            ? API.get<{ applications: number }>("/admin/badges").catch(() => ({ applications: 0 }))
-            : Promise.resolve({ applications: 0 }),
           API.get<SystemStatus>("/cashier/system_status").catch(() => null),
         ]);
         setData(dash);
         setHours(hourly.hours ?? []);
-        setNewApplications(badges.applications ?? 0);
+        setNewApplications(badges["nav-badge-applications"] ?? 0);
         setSystemStatus(status);
       } catch {
         /* ignore */
       } finally {
         setLoading(false);
+        pollInFlight.current = false;
       }
     };
+
     load();
     const id = setInterval(load, 30000);
     return () => clearInterval(id);
-  }, [isAdmin, ready, rangeReady, dateRange]);
+  }, [isAdmin, ready, rangeReady, dateRange, badges]);
 
   const trend = useMemo(() => data?.trend ?? [], [data?.trend]);
   const trendChartData = useMemo(

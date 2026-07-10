@@ -11,9 +11,12 @@ import {
   verifyTotp,
   generateSecret,
   getQrDataUrl,
+  verifyToken,
+  clearSession,
 } from "../auth/index.js";
 import { ok, error } from "../services/response.js";
 import { byIp, getClientIp } from "../services/rate-limit.js";
+import { enforcePanelAccess } from "../services/access/enforce.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
 import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
@@ -23,6 +26,7 @@ import { buildDashboardStats, buildHourlyStats, resolveDashboardRange } from "..
 export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   app.post("/login", async (request, reply) => {
     if (!(await byIp(request, "login", 10, 60, reply))) return;
+    if (!(await enforcePanelAccess(request, reply))) return;
 
     const body = request.body as { username?: string; password?: string };
     const username = String(body.username ?? "").trim();
@@ -52,6 +56,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/onboarding/setup", async (request, reply) => {
     if (!(await byIp(request, "onboarding", 10, 60, reply))) return;
+    if (!(await enforcePanelAccess(request, reply))) return;
 
     const partialToken = String((request.body as { partial_token?: string }).partial_token ?? "");
     const cashierId = verifyPartialToken(partialToken);
@@ -78,6 +83,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/onboarding/verify", async (request, reply) => {
     if (!(await byIp(request, "onboarding", 10, 60, reply))) return;
+    if (!(await enforcePanelAccess(request, reply))) return;
 
     const body = request.body as { partial_token?: string; code?: string };
     const cashierId = verifyPartialToken(String(body.partial_token ?? ""));
@@ -112,6 +118,7 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/verify_2fa", async (request, reply) => {
     if (!(await byIp(request, "2fa", 10, 60, reply))) return;
+    if (!(await enforcePanelAccess(request, reply))) return;
     const body = request.body as { partial_token?: string; code?: string };
     const cashierId = verifyPartialToken(String(body.partial_token ?? ""));
     if (!cashierId) {
@@ -135,6 +142,13 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/logout", async (request, reply) => {
+    const header = request.headers.authorization ?? "";
+    const token = header.replace(/^Bearer\s+/i, "");
+    const user = verifyToken(token);
+    if (user) {
+      await clearSession(user.id);
+    }
+
     const body = request.body as { log_id?: number };
     if (body.log_id) {
       await prisma.loginLog.updateMany({
@@ -143,6 +157,25 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     ok(reply, {});
+  });
+
+  app.get("/badges", async (request, reply) => {
+    const user = await requireAuth(request, reply, "kasiyer", "admin");
+    if (!user) return;
+
+    const siteIds = await getCashierSiteIds(user);
+    const where: { status: "pending"; siteId?: { in: number[] } } = { status: "pending" };
+
+    if (siteIds !== "all") {
+      if (siteIds.length === 0) {
+        ok(reply, { pending_deposits: 0 });
+        return;
+      }
+      where.siteId = { in: siteIds };
+    }
+
+    const pendingDeposits = await prisma.deposit.count({ where });
+    ok(reply, { pending_deposits: pendingDeposits });
   });
 
   app.get("/deposits", async (request, reply) => {

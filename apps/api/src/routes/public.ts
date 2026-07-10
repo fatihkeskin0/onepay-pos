@@ -3,11 +3,24 @@ import { prisma } from "@onepara/db";
 import { ok, error } from "../services/response.js";
 import { byIp, getClientIp } from "../services/rate-limit.js";
 import { getSetting } from "../services/callback.js";
+import { isPanelAccessEnabled, isPanelIpAllowed } from "../services/access/panel-whitelist.js";
 import { isValidTelegramUsername, normalizeTelegramUsername } from "../services/telegram-username.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function publicRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/panel_access", async (request, reply) => {
+    const q = request.query as { ip?: string };
+    const ip = String(q.ip ?? "").trim() || getClientIp(request);
+    try {
+      const enabled = await isPanelAccessEnabled();
+      const allowed = enabled ? await isPanelIpAllowed(ip) : true;
+      ok(reply, { enabled, allowed, ip });
+    } catch {
+      error(reply, "Erişim kontrolü başarısız", 503, null, "UPSTREAM_UNAVAILABLE");
+    }
+  });
+
   app.get("/landing-info", async (_request, reply) => {
     const username = normalizeTelegramUsername(await getSetting("telegram_support_username"));
     ok(reply, {

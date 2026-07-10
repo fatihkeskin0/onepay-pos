@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ADMIN_NAV, KASIYER_NAV, LS_KEYS, type NavItem } from "@onepara/shared";
 import { API } from "@/lib/api";
 import { PAGE_HREF, DEFAULT_PANEL_HREF } from "@/lib/nav";
 import { NavIcon, roleLabel } from "@/components/NavIcon";
 import { useClientSession } from "@/hooks/useClientSession";
+import { AuthRedirectProvider } from "@/providers/AuthRedirectProvider";
+import { SessionProvider, useSessionContext } from "@/providers/SessionProvider";
+
+const BADGE_POLL_MS = 10_000;
 
 function LogoIcon({ small }: { small?: boolean }) {
   return <div className={`logo-icon ${small ? "logo-icon-sm" : ""}`.trim()}>OP</div>;
@@ -33,46 +37,61 @@ function groupNav(items: NavItem[]): { section: string; items: NavItem[] }[] {
   return groups;
 }
 
-export default function PanelLayout({ children }: { children: React.ReactNode }) {
+function PanelLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { ready, role, username, isAdmin } = useClientSession();
+  const { ready, role, username, isAdmin, token } = useClientSession();
+  const { setBadges } = useSessionContext();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [badges, setBadges] = useState<Record<string, number>>({});
+  const [badges, setLocalBadges] = useState<Record<string, number>>({});
+  const pollInFlight = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
-    if (!API.token()) {
+    if (!token) {
       router.replace("/login");
     }
-  }, [ready, router]);
+  }, [ready, token, router]);
 
   useEffect(() => {
-    if (!ready || !role) return;
+    if (!ready || !role || !token) return;
+
     const poll = async () => {
+      if (pollInFlight.current || document.hidden) return;
+      pollInFlight.current = true;
       try {
         if (isAdmin) {
-          const data = await API.get<{ deposits: number; suspicious: number; online_kas: number; applications: number }>(
-            "/admin/badges",
-          );
-          setBadges({
+          const data = await API.get<{
+            deposits: number;
+            suspicious: number;
+            online_kas: number;
+            applications: number;
+          }>("/admin/badges");
+          const next = {
             "nav-badge-adm-dep": data.deposits,
             "nav-badge-supheli": data.suspicious,
             "nav-badge-online-kas": data.online_kas,
             "nav-badge-applications": data.applications,
-          });
+          };
+          setLocalBadges(next);
+          setBadges(next);
         } else {
-          const data = await API.get<{ pending_deposits: number }>("/cashier/stats");
-          setBadges({ "nav-badge-dep": data.pending_deposits });
+          const data = await API.get<{ pending_deposits: number }>("/cashier/badges");
+          const next = { "nav-badge-dep": data.pending_deposits };
+          setLocalBadges(next);
+          setBadges(next);
         }
       } catch {
         /* ignore */
+      } finally {
+        pollInFlight.current = false;
       }
     };
+
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, BADGE_POLL_MS);
     return () => clearInterval(id);
-  }, [role, ready, isAdmin]);
+  }, [role, ready, token, isAdmin, setBadges]);
 
   const toggleTheme = async () => {
     const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
@@ -88,7 +107,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   const nav = filterNav(isAdmin ? ADMIN_NAV : KASIYER_NAV);
   const navGroups = useMemo(() => groupNav(nav), [nav]);
 
-  if (!ready) {
+  if (!ready || !token) {
     return (
       <div className="app app-loading">
         <p className="text-muted">Yükleniyor...</p>
@@ -179,5 +198,15 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
     </>
+  );
+}
+
+export default function PanelLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthRedirectProvider>
+        <PanelLayoutInner>{children}</PanelLayoutInner>
+      </AuthRedirectProvider>
+    </SessionProvider>
   );
 }

@@ -13,6 +13,7 @@ export interface PspPaymentInput {
   callbackUrl: string;
   userIp?: string;
   email?: string;
+  uiTheme?: "light" | "dark";
 }
 
 export interface PspPaymentResult {

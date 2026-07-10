@@ -6,6 +6,7 @@ import {
   toInternalPanelPath,
   toPublicPanelPath,
 } from "@/lib/panel-routes";
+import { internalApiUrl } from "@/lib/api-internal-url";
 import {
   isMarketingRequestHost,
   isPanelRequestHost,
@@ -73,7 +74,37 @@ function isMarketingContentPath(pathname: string): boolean {
   return pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/");
 }
 
-export function middleware(request: NextRequest) {
+function middlewareClientIp(request: NextRequest): string {
+  const cf = request.headers.get("cf-connecting-ip");
+  if (cf) return cf;
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0]?.trim() ?? "127.0.0.1";
+  return "127.0.0.1";
+}
+
+function isPanelAccessGuardedPath(pathname: string): boolean {
+  if (pathname === "/access-denied") return false;
+  if (pathname === "/login") return true;
+  return isPanelPublicPath(pathname);
+}
+
+async function isPanelAccessBlocked(request: NextRequest): Promise<boolean> {
+  const ip = middlewareClientIp(request);
+  try {
+    const res = await fetch(internalApiUrl(`/public/panel_access?ip=${encodeURIComponent(ip)}`), {
+      signal: AbortSignal.timeout(3000),
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { success?: boolean; data?: { enabled?: boolean; allowed?: boolean } };
+    const data = body.data;
+    return data?.enabled === true && data?.allowed === false;
+  } catch {
+    return false;
+  }
+}
+
+export async function middleware(request: NextRequest) {
   const paymentHost = resolvePaymentHost();
   const panelOrigin = resolvePanelOrigin();
   const marketingOrigin = resolveMarketingOrigin();
@@ -85,8 +116,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const marketingSplit = usesMarketingDomain();
   const onPanelHost = isPanelRequestHost(host);
+  const marketingSplit = usesMarketingDomain();
+  const panelGuarded =
+    onPanelHost || (!marketingSplit && isPanelAccessGuardedPath(pathname));
+
+  if (panelGuarded && isPanelAccessGuardedPath(pathname)) {
+    if (await isPanelAccessBlocked(request)) {
+      return redirectOnSameHost(request, "/access-denied", "");
+    }
+  }
+
   const onMarketingHost = isMarketingRequestHost(host);
   const isLegacyPanelPath =
     pathname === PANEL_INTERNAL_PREFIX || pathname.startsWith(`${PANEL_INTERNAL_PREFIX}/`);

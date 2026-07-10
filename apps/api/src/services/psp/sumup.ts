@@ -1,4 +1,5 @@
 import { config } from "../../config.js";
+import type { PspFetchFn } from "../proxy/types.js";
 import type { PspCallbackResult, PspPaymentInput, PspPaymentResult, PspProvider } from "./types.js";
 
 interface SumUpCheckoutResponse {
@@ -13,6 +14,11 @@ interface SumUpCheckoutResponse {
 export class SumUpProvider implements PspProvider {
   name = "sumup" as const;
   readonly renderMode = "redirect" as const;
+  private readonly fetchFn: PspFetchFn;
+
+  constructor(fetchFn: PspFetchFn = (url, init) => fetch(url, init)) {
+    this.fetchFn = fetchFn;
+  }
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
     if (!config.psp.sumup.apiKey || !config.psp.sumup.merchantCode) {
@@ -31,7 +37,7 @@ export class SumUpProvider implements PspProvider {
     };
 
     try {
-      const res = await fetch("https://api.sumup.com/v0.1/checkouts", {
+      const res = await this.fetchFn("https://api.sumup.com/v0.1/checkouts", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.psp.sumup.apiKey}`,
@@ -71,7 +77,7 @@ export class SumUpProvider implements PspProvider {
     }
 
     try {
-      const res = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
+      const res = await this.fetchFn(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
         headers: { Authorization: `Bearer ${config.psp.sumup.apiKey}` },
       });
 

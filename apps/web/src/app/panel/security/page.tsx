@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
+import { StepUpModal } from "@/components/auth/StepUpModal";
 
 interface TrustedIp {
   id: number;
@@ -34,9 +35,40 @@ const emptyForm = (): IpForm => ({
   note: "",
 });
 
+interface PanelAccessIp {
+  id: number;
+  cidr: string;
+  label: string;
+  note: string | null;
+  is_active: boolean;
+}
+
+interface PanelIpForm {
+  cidr: string;
+  label: string;
+  note: string;
+}
+
+const emptyPanelForm = (): PanelIpForm => ({
+  cidr: "",
+  label: "",
+  note: "",
+});
+
 export default function SecurityPage() {
   const { notify } = useToast();
   const [items, setItems] = useState<TrustedIp[]>([]);
+  const [panelEnabled, setPanelEnabled] = useState(false);
+  const [panelItems, setPanelItems] = useState<PanelAccessIp[]>([]);
+  const [panelAddOpen, setPanelAddOpen] = useState(false);
+  const [panelForm, setPanelForm] = useState<PanelIpForm>(emptyPanelForm());
+  const [panelImportOpen, setPanelImportOpen] = useState(false);
+  const [panelImportText, setPanelImportText] = useState("");
+  const [stepUp, setStepUp] = useState<{
+    title: string;
+    run: (totpCode: string) => Promise<void>;
+  } | null>(null);
+  const [stepUpLoading, setStepUpLoading] = useState(false);
   const [fail2banFile, setFail2banFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -46,9 +78,14 @@ export default function SecurityPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await API.get<{ items: TrustedIp[]; fail2ban_file: string | null }>("/admin/trusted_ips");
-      setItems(data.items);
-      setFail2banFile(data.fail2ban_file);
+      const [trustedData, panelData] = await Promise.all([
+        API.get<{ items: TrustedIp[]; fail2ban_file: string | null }>("/admin/trusted_ips"),
+        API.get<{ enabled: boolean; items: PanelAccessIp[] }>("/admin/panel_access"),
+      ]);
+      setItems(trustedData.items);
+      setFail2banFile(trustedData.fail2ban_file);
+      setPanelEnabled(panelData.enabled);
+      setPanelItems(panelData.items);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
     } finally {
@@ -59,6 +96,97 @@ export default function SecurityPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const executeStepUp = async (totpCode: string) => {
+    if (!stepUp) return;
+    setStepUpLoading(true);
+    try {
+      await stepUp.run(totpCode);
+      setStepUp(null);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Hata", "error");
+    } finally {
+      setStepUpLoading(false);
+    }
+  };
+
+  const requestPanelToggle = () => {
+    const next = !panelEnabled;
+    if (next && panelItems.filter((i) => i.is_active).length === 0) {
+      notify("Önce en az bir IP ekleyin, aksi halde tüm erişim engellenir", "error");
+      return;
+    }
+    setStepUp({
+      title: next ? "Panel whitelist aç" : "Panel whitelist kapat",
+      run: async (totpCode) => {
+        await API.post("/admin/panel_access/toggle", { enabled: next, totp_code: totpCode });
+        notify(next ? "Whitelist etkin" : "Whitelist kapalı", "success");
+        load();
+      },
+    });
+  };
+
+  const requestPanelAdd = () => {
+    setStepUp({
+      title: "Panel erişim IP ekle",
+      run: async (totpCode) => {
+        await API.post("/admin/panel_access/add", { ...panelForm, totp_code: totpCode });
+        notify("IP eklendi", "success");
+        setPanelAddOpen(false);
+        setPanelForm(emptyPanelForm());
+        load();
+      },
+    });
+  };
+
+  const requestPanelImport = () => {
+    setStepUp({
+      title: "Panel IP import",
+      run: async (totpCode) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(panelImportText);
+        } catch {
+          throw new Error("Geçersiz JSON");
+        }
+        if (!Array.isArray(parsed)) throw new Error("JSON bir dizi olmalı");
+        const result = await API.post<{ created: number; skipped: number }>("/admin/panel_access/import", {
+          items: parsed,
+          totp_code: totpCode,
+        });
+        notify(`${result.created} eklendi, ${result.skipped} atlandı`, "success");
+        setPanelImportOpen(false);
+        setPanelImportText("");
+        load();
+      },
+    });
+  };
+
+  const togglePanelIp = (item: PanelAccessIp) => {
+    setStepUp({
+      title: item.is_active ? "Panel IP pasifleştir" : "Panel IP aktifleştir",
+      run: async (totpCode) => {
+        await API.put(`/admin/panel_access/${item.id}`, {
+          is_active: !item.is_active,
+          totp_code: totpCode,
+        });
+        notify("Güncellendi", "success");
+        load();
+      },
+    });
+  };
+
+  const removePanelIp = (item: PanelAccessIp) => {
+    if (!window.confirm(`${item.cidr} silinsin mi?`)) return;
+    setStepUp({
+      title: "Panel IP sil",
+      run: async (totpCode) => {
+        await API.delete(`/admin/panel_access/${item.id}`, { totp_code: totpCode });
+        notify("Silindi", "success");
+        load();
+      },
+    });
+  };
 
   const submitAdd = async () => {
     try {
@@ -127,6 +255,60 @@ export default function SecurityPage() {
         <button type="button" className="btn btn-primary" onClick={() => setAddOpen(true)}>
           IP Ekle
         </button>
+      </div>
+
+      <div className="card mb-4">
+        <h3 className="card-title-sm">Panel Erişim Whitelist</h3>
+        <p className="settings-note mb-3">
+          Etkinleştirildiğinde yalnızca listedeki IP&apos;ler panele giriş yapabilir. Güvenilir IP listesinden
+          bağımsızdır (partner API vs panel erişimi).
+        </p>
+        <div className="flex-row mb-3">
+          <button type="button" className={`btn ${panelEnabled ? "btn-ghost" : "btn-primary"}`} onClick={requestPanelToggle}>
+            {panelEnabled ? "Whitelist Kapat" : "Whitelist Aç"}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setPanelAddOpen(true)}>
+            IP Ekle
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setPanelImportOpen(true)}>
+            JSON Import
+          </button>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>IP / CIDR</th>
+                <th>Etiket</th>
+                <th>Durum</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {panelItems.length === 0 ? (
+                <tr>
+                  <td colSpan={4}>Henüz panel IP eklenmedi.</td>
+                </tr>
+              ) : (
+                panelItems.map((item) => (
+                  <tr key={item.id}>
+                    <td><code>{item.cidr}</code></td>
+                    <td>{item.label}</td>
+                    <td>{item.is_active ? "Aktif" : "Pasif"}</td>
+                    <td>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => togglePanelIp(item)}>
+                        {item.is_active ? "Pasif" : "Aktif"}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => removePanelIp(item)}>
+                        Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="card mb-4">
@@ -273,6 +455,72 @@ export default function SecurityPage() {
           />
         </div>
       </Modal>
+
+      <Modal
+        open={panelAddOpen}
+        title="Panel Erişim IP Ekle"
+        onClose={() => setPanelAddOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setPanelAddOpen(false)}>İptal</button>
+            <button type="button" className="btn btn-primary" onClick={requestPanelAdd}>Ekle</button>
+          </>
+        }
+      >
+        <div className="form-group">
+          <label className="form-label">IP veya CIDR</label>
+          <input
+            className="form-input"
+            value={panelForm.cidr}
+            onChange={(e) => setPanelForm((f) => ({ ...f, cidr: e.target.value }))}
+            placeholder="1.2.3.4 veya 10.0.0.0/24"
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Etiket</label>
+          <input
+            className="form-input"
+            value={panelForm.label}
+            onChange={(e) => setPanelForm((f) => ({ ...f, label: e.target.value }))}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Not (opsiyonel)</label>
+          <input
+            className="form-input"
+            value={panelForm.note}
+            onChange={(e) => setPanelForm((f) => ({ ...f, note: e.target.value }))}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={panelImportOpen}
+        title="Panel IP JSON Import"
+        onClose={() => setPanelImportOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setPanelImportOpen(false)}>İptal</button>
+            <button type="button" className="btn btn-primary" onClick={requestPanelImport}>Import</button>
+          </>
+        }
+      >
+        <textarea
+          className="form-input"
+          rows={6}
+          value={panelImportText}
+          onChange={(e) => setPanelImportText(e.target.value)}
+          placeholder='[{"cidr":"1.2.3.4","label":"Ofis"}]'
+        />
+      </Modal>
+
+      <StepUpModal
+        open={stepUp !== null}
+        title={stepUp?.title}
+        loading={stepUpLoading}
+        onClose={() => setStepUp(null)}
+        onConfirm={executeStepUp}
+      />
     </>
   );
 }

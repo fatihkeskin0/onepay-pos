@@ -1,17 +1,31 @@
 import type { PspProviderName } from "@onepara/shared";
 import { config } from "../../config.js";
+import { fetchForProvider } from "../proxy/psp-fetch.js";
+import type { PspFetchFn } from "../proxy/types.js";
 import { PayTrProvider } from "./paytr.js";
 import { StripeProvider } from "./stripe.js";
 import { SumUpProvider } from "./sumup.js";
 import type { PspProvider, PspRenderMode } from "./types.js";
 
-const providers: Record<PspProviderName, PspProvider> = {
-  paytr: new PayTrProvider(),
-  stripe: new StripeProvider(),
-  sumup: new SumUpProvider(),
-};
-
 const ALL_NAMES: PspProviderName[] = ["paytr", "stripe", "sumup"];
+
+const providerCache = new Map<PspProviderName, PspProvider>();
+
+export function createPspProvider(name: PspProviderName, fetchFn?: PspFetchFn): PspProvider {
+  const fetch =
+    fetchFn ?? ((url: string | URL, init?: RequestInit) => fetchForProvider(name, url, init));
+
+  switch (name) {
+    case "paytr":
+      return new PayTrProvider(fetch);
+    case "stripe":
+      return new StripeProvider(fetch);
+    case "sumup":
+      return new SumUpProvider(fetch);
+    default:
+      throw new Error(`Unknown PSP provider: ${name}`);
+  }
+}
 
 export interface PspProviderMeta {
   name: PspProviderName;
@@ -20,11 +34,17 @@ export interface PspProviderMeta {
 }
 
 export function isKnownProvider(name: string): name is PspProviderName {
-  return ALL_NAMES.includes(name as PspProviderName) && name in providers;
+  return ALL_NAMES.includes(name as PspProviderName);
 }
 
 export function getProvider(name: PspProviderName): PspProvider | null {
-  return providers[name] ?? null;
+  if (!isKnownProvider(name)) return null;
+  let provider = providerCache.get(name);
+  if (!provider) {
+    provider = createPspProvider(name);
+    providerCache.set(name, provider);
+  }
+  return provider;
 }
 
 /** Capability metadata — adding a POS = new adapter + one line in `providers`. */
@@ -86,5 +106,3 @@ export async function handlePspFailed(depositId: number, reason = "PSP ödeme ba
     await depositRejected(rejected, siteCb.apiKey, url);
   }
 }
-
-export { providers };

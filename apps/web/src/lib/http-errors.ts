@@ -14,6 +14,7 @@ export type ApiErrorCode =
   | "SESSION_SUPERSEDED"
   | "SESSION_INVALID"
   | "TOTP_REQUIRED"
+  | "PANEL_IP_BLOCKED"
   | string;
 
 export interface ApiEnvelope<T = unknown> {
@@ -100,6 +101,9 @@ export function mapPanelError(status: number, message: string, code?: ApiErrorCo
   }
   if (code === "STEP_UP_REQUIRED") {
     return "2FA doğrulaması gerekli";
+  }
+  if (code === "PANEL_IP_BLOCKED") {
+    return "Bu IP adresinden panele erişim izni yok";
   }
   if (code === "RATE_LIMITED" || status === 429) {
     return message || "Çok fazla istek. Lütfen bekleyin.";

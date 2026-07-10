@@ -329,18 +329,54 @@ model DepositEditLog {
 }
 
 model PosMethod {
+  id            Int      @id @default(autoincrement())
+  provider      String   @unique @db.VarChar(30)
+  label         String   @db.VarChar(60)
+  enabled       Boolean  @default(false)
+  isDefault     Boolean  @default(false) @map("is_default")
+  minAmount     Decimal  @default(50) @map("min_amount") @db.Decimal(12, 2)
+  maxAmount     Decimal  @default(100000) @map("max_amount") @db.Decimal(12, 2)
+  sortOrder     Int      @default(0) @map("sort_order")
+  proxyEnabled  Boolean  @default(false) @map("proxy_enabled")
+  proxyMode     String   @default("off") @map("proxy_mode") @db.VarChar(20)
+  proxyEntryIds Json?    @map("proxy_entry_ids")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("pos_methods")
+}
+
+model ProxyPoolEntry {
+  id          Int       @id @default(autoincrement())
+  label       String    @db.VarChar(120)
+  host        String    @db.VarChar(255)
+  port        Int
+  protocol    String    @default("http") @db.VarChar(10)
+  username    String?   @db.VarChar(120)
+  passwordEnc String?   @map("password_enc") @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  failCount   Int       @default(0) @map("fail_count")
+  lastError   String?   @map("last_error") @db.VarChar(500)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([host, port, username])
+  @@index([isActive])
+  @@map("proxy_pool_entries")
+}
+
+model PanelAccessIp {
   id        Int      @id @default(autoincrement())
-  provider  String   @unique @db.VarChar(30)
-  label     String   @db.VarChar(60)
-  enabled   Boolean  @default(false)
-  isDefault Boolean  @default(false) @map("is_default")
-  minAmount Decimal  @default(50) @map("min_amount") @db.Decimal(12, 2)
-  maxAmount Decimal  @default(100000) @map("max_amount") @db.Decimal(12, 2)
-  sortOrder Int      @default(0) @map("sort_order")
+  cidr      String   @unique @db.VarChar(64)
+  label     String   @db.VarChar(120)
+  note      String?  @db.VarChar(500)
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("pos_methods")
+  @@index([isActive])
+  @@map("panel_access_ips")
 }
 
 model TrustedIp {

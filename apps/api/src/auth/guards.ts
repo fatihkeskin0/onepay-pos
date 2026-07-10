@@ -1,16 +1,30 @@
 import type { FastifyRequest } from "fastify";
 import { prisma } from "@onepara/db";
 import type { TokenPayload } from "@onepara/shared";
+import { enforcePanelAccess } from "../services/access/enforce.js";
 import { error } from "../services/response.js";
 import { getClientIp } from "../services/rate-limit.js";
+import { setAuthCashier } from "./request-context.js";
 import { verifyToken } from "./token.js";
 import { validateSession } from "./session.js";
+
+const cashierAuthSelect = {
+  id: true,
+  isActive: true,
+  tokenVersion: true,
+  totpEnabled: true,
+  totpSecret: true,
+  ipLockEnabled: true,
+  lastSeenAt: true,
+} as const;
 
 export async function requireAuth(
   request: FastifyRequest,
   reply: Parameters<typeof error>[0],
   ...roles: string[]
 ): Promise<TokenPayload | null> {
+  if (!(await enforcePanelAccess(request, reply))) return null;
+
   const header = request.headers.authorization ?? "";
   const token = header.replace(/^Bearer\s+/i, "");
   const user = verifyToken(token);
@@ -25,11 +39,19 @@ export async function requireAuth(
     return null;
   }
 
-  const cashier = await prisma.cashier.findUnique({ where: { id: user.id } });
+  const cashier = await prisma.cashier.findUnique({
+    where: { id: user.id },
+    select: cashierAuthSelect,
+  });
   if (!cashier?.isActive) {
     error(reply, "Hesabınız devre dışı bırakıldı", 401);
     return null;
   }
+
+  setAuthCashier(request, {
+    totpEnabled: cashier.totpEnabled,
+    totpSecret: cashier.totpSecret,
+  });
 
   if ((cashier.tokenVersion ?? 0) > (user.tv ?? 0)) {
     error(reply, "Oturum sonlandırıldı", 401);

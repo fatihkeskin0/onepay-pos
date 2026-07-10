@@ -1,17 +1,24 @@
 import { createHmac } from "node:crypto";
 import { config } from "../../config.js";
+import type { PspFetchFn } from "../proxy/types.js";
 import type { PspCallbackResult, PspPaymentInput, PspPaymentResult, PspProvider } from "./types.js";
 
 interface PayTrTokenResponse {
   status?: string;
   token?: string;
   reason?: string;
+  iframe_url?: string;
 }
 
 /** PayTR iFrame API adapter */
 export class PayTrProvider implements PspProvider {
   name = "paytr" as const;
   readonly renderMode = "iframe" as const;
+  private readonly fetchFn: PspFetchFn;
+
+  constructor(fetchFn: PspFetchFn = (url, init) => fetch(url, init)) {
+    this.fetchFn = fetchFn;
+  }
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
     const { paytr } = config.psp;
@@ -72,10 +79,12 @@ export class PayTrProvider implements PspProvider {
       currency,
       test_mode: testMode,
       lang: "tr",
+      iframe_v2: "1",
+      iframe_v2_dark: input.uiTheme === "dark" ? "1" : "0",
     });
 
     try {
-      const res = await fetch("https://www.paytr.com/odeme/api/get-token", {
+      const res = await this.fetchFn("https://www.paytr.com/odeme/api/get-token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: form,
@@ -90,9 +99,16 @@ export class PayTrProvider implements PspProvider {
       return {
         providerRef: merchantOid,
         renderMode: this.renderMode,
-        iframeUrl: `https://www.paytr.com/odeme/guvenli/${data.token}`,
+        iframeUrl:
+          data.iframe_url ?? `https://www.paytr.com/odeme/guvenli/${data.token}`,
         status: "initiated",
-        rawResponse: { merchantOid, token: data.token, total_amount: amountKurus },
+        rawResponse: {
+          merchantOid,
+          token: data.token,
+          total_amount: amountKurus,
+          iframe_v2: true,
+          iframe_v2_dark: input.uiTheme === "dark",
+        },
       };
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : "PayTR request failed");

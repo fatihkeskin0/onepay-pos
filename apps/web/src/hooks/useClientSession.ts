@@ -1,32 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { API } from "@/lib/api";
-
-interface ClientSession {
-  role: string | null;
-  username: string;
-}
+import { useSessionContext } from "@/providers/SessionProvider";
 
 /**
- * Reads localStorage session after mount so SSR and the first client render match.
+ * Panel session from SessionProvider (single source of truth after mount).
  */
 export function useClientSession() {
-  const [session, setSession] = useState<ClientSession | null>(null);
-
-  useEffect(() => {
-    setSession({
-      role: API.role(),
-      username: API.username() ?? "",
-    });
-  }, []);
+  const { ready, role, username, isAdmin, isKasiyer, token, badges } = useSessionContext();
 
   return {
-    /** Session has been read from localStorage (post-mount). */
-    ready: session !== null,
-    role: session?.role ?? null,
-    username: session?.username ?? "",
-    isAdmin: session?.role === "admin",
-    isKasiyer: session?.role === "kasiyer",
+    ready,
+    role,
+    username,
+    isAdmin,
+    isKasiyer,
+    token,
+    badges,
   };
 }

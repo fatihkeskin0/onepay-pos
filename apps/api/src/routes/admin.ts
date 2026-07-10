@@ -21,6 +21,24 @@ import {
   syncTrustedIpIntegrations,
   updateTrustedIp,
 } from "../services/trusted-ip.js";
+import {
+  addPanelAccessIp,
+  deletePanelAccessIp,
+  importPanelAccessIps,
+  isPanelAccessEnabled,
+  listPanelAccessIps,
+  setPanelAccessEnabled,
+  updatePanelAccessIp,
+} from "../services/access/panel-whitelist.js";
+import {
+  addProxyPoolEntry,
+  deleteProxyPoolEntry,
+  importProxyPoolEntries,
+  listProxyPoolEntries,
+  updateProxyPoolEntry,
+} from "../services/proxy/pool.js";
+import type { ProxyImportItem } from "../services/proxy/types.js";
+import { byIp } from "../services/rate-limit.js";
 import { buildDashboardStats, resolveDashboardRange } from "../services/dashboard-stats.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
@@ -778,6 +796,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       max_amount?: number;
       sort_order?: number;
       is_default?: boolean;
+      proxy_enabled?: boolean;
+      proxy_mode?: string;
+      proxy_entry_ids?: number[];
     };
     const provider = String(body.provider ?? "");
     if (!provider) {
@@ -795,6 +816,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         minAmount: body.min_amount != null ? Number(body.min_amount) : undefined,
         maxAmount: body.max_amount != null ? Number(body.max_amount) : undefined,
         sortOrder: body.sort_order != null ? Number(body.sort_order) : undefined,
+        proxyEnabled: body.proxy_enabled != null ? Boolean(body.proxy_enabled) : undefined,
+        proxyMode:
+          body.proxy_mode != null
+            ? String(body.proxy_mode).slice(0, 20)
+            : undefined,
+        proxyEntryIds:
+          body.proxy_entry_ids != null
+            ? body.proxy_entry_ids.filter((id) => Number.isFinite(id))
+            : undefined,
       },
       create: {
         provider,
@@ -837,6 +867,173 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const updated = await prisma.posMethod.findUnique({ where: { provider } });
     ok(reply, { method: updated });
+  });
+
+  app.get("/proxy_pool", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    try {
+      const items = await listProxyPoolEntries();
+      ok(reply, { items });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Liste alınamadı", 500);
+    }
+  });
+
+  app.post("/proxy_pool", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const body = request.body as ProxyImportItem;
+    try {
+      const item = await addProxyPoolEntry(body);
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Eklenemedi", 422);
+    }
+  });
+
+  app.post("/proxy_pool/import", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    if (!(await byIp(request, "proxy_import", 5, 60, reply))) return;
+
+    const body = request.body as { items?: ProxyImportItem[] };
+    try {
+      const result = await importProxyPoolEntries(body.items ?? []);
+      ok(reply, result);
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Import başarısız", 422);
+    }
+  });
+
+  app.put("/proxy_pool/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const id = Number((request.params as { id?: string }).id);
+    if (!id) {
+      error(reply, "id gerekli", 422);
+      return;
+    }
+    const body = request.body as Record<string, unknown>;
+    try {
+      const item = await updateProxyPoolEntry(id, {
+        label: body.label != null ? String(body.label) : undefined,
+        is_active: body.is_active !== undefined ? Boolean(body.is_active) : undefined,
+        protocol: body.protocol === "https" ? "https" : body.protocol === "http" ? "http" : undefined,
+        username: body.username !== undefined ? (body.username ? String(body.username) : null) : undefined,
+        password: body.password != null ? String(body.password) : undefined,
+        clear_password: body.clear_password === true,
+      });
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Güncellenemedi", 422);
+    }
+  });
+
+  app.delete("/proxy_pool/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const id = Number((request.params as { id?: string }).id);
+    if (!id) {
+      error(reply, "id gerekli", 422);
+      return;
+    }
+    try {
+      await deleteProxyPoolEntry(id);
+      ok(reply, {});
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Silinemedi", 422);
+    }
+  });
+
+  app.get("/panel_access", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user) return;
+    try {
+      const enabled = await isPanelAccessEnabled();
+      const items = await listPanelAccessIps();
+      ok(reply, { enabled, items });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Liste alınamadı", 500);
+    }
+  });
+
+  app.post("/panel_access/toggle", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const enabled = Boolean((request.body as { enabled?: boolean }).enabled);
+    try {
+      await setPanelAccessEnabled(enabled);
+      ok(reply, { enabled });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Güncellenemedi", 500);
+    }
+  });
+
+  app.post("/panel_access/add", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const body = request.body as { cidr?: string; label?: string; note?: string };
+    try {
+      const item = await addPanelAccessIp({
+        cidr: String(body.cidr ?? ""),
+        label: String(body.label ?? ""),
+        note: body.note != null ? String(body.note) : undefined,
+      });
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Eklenemedi", 422);
+    }
+  });
+
+  app.put("/panel_access/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const id = Number((request.params as { id?: string }).id);
+    if (!id) {
+      error(reply, "id gerekli", 422);
+      return;
+    }
+    const body = request.body as Record<string, unknown>;
+    try {
+      const item = await updatePanelAccessIp(id, {
+        cidr: body.cidr != null ? String(body.cidr) : undefined,
+        label: body.label != null ? String(body.label) : undefined,
+        note: body.note !== undefined ? (body.note ? String(body.note) : null) : undefined,
+        is_active: body.is_active !== undefined ? Boolean(body.is_active) : undefined,
+      });
+      ok(reply, { item });
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Güncellenemedi", 422);
+    }
+  });
+
+  app.delete("/panel_access/:id", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const id = Number((request.params as { id?: string }).id);
+    if (!id) {
+      error(reply, "id gerekli", 422);
+      return;
+    }
+    try {
+      await deletePanelAccessIp(id);
+      ok(reply, {});
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Silinemedi", 422);
+    }
+  });
+
+  app.post("/panel_access/import", async (request, reply) => {
+    const user = await requireAuth(request, reply, "admin");
+    if (!user || !(await requireStepUp(request, reply, user.id))) return;
+    const body = request.body as { items?: Array<{ cidr: string; label: string; note?: string }> };
+    try {
+      const result = await importPanelAccessIps(body.items ?? []);
+      ok(reply, result);
+    } catch (err) {
+      error(reply, err instanceof Error ? err.message : "Import başarısız", 422);
+    }
   });
 
   app.post("/demo_payment_link", async (request, reply) => {

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ProxyMode } from "@onepara/shared";
 import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { StepUpModal } from "@/components/auth/StepUpModal";
+import { ProxyConfigModal } from "@/components/pos/ProxyConfigModal";
 
 interface PosMethod {
   id: number;
@@ -16,6 +18,17 @@ interface PosMethod {
   maxAmount: string;
   sortOrder: number;
   configured: boolean;
+  proxyEnabled: boolean;
+  proxyMode: ProxyMode;
+  proxyEntryIds: number[] | null;
+}
+
+interface ProxyPoolEntry {
+  id: number;
+  label: string;
+  host: string;
+  port: number;
+  is_active: boolean;
 }
 
 interface EditForm {
@@ -28,8 +41,10 @@ interface EditForm {
 
 export default function PosSettingsPage() {
   const [items, setItems] = useState<PosMethod[]>([]);
+  const [poolEntries, setPoolEntries] = useState<ProxyPoolEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editTarget, setEditTarget] = useState<PosMethod | null>(null);
+  const [proxyTarget, setProxyTarget] = useState<PosMethod | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({
     label: "",
     enabled: false,
@@ -61,8 +76,18 @@ export default function PosSettingsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await API.get<{ items: PosMethod[] }>("/admin/pos_methods");
-      setItems(data.items);
+      const [posData, poolData] = await Promise.all([
+        API.get<{ items: PosMethod[] }>("/admin/pos_methods"),
+        API.get<{ items: ProxyPoolEntry[] }>("/admin/proxy_pool"),
+      ]);
+      setItems(
+        posData.items.map((m) => ({
+          ...m,
+          proxyMode: (m.proxyMode ?? "off") as ProxyMode,
+          proxyEntryIds: Array.isArray(m.proxyEntryIds) ? m.proxyEntryIds : [],
+        })),
+      );
+      setPoolEntries(poolData.items);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Yüklenemedi", "error");
     } finally {
@@ -117,6 +142,29 @@ export default function PosSettingsPage() {
     });
   };
 
+  const requestProxySave = (config: {
+    proxy_enabled: boolean;
+    proxy_mode: ProxyMode;
+    proxy_entry_ids: number[];
+  }) => {
+    if (!proxyTarget) return;
+    setStepUp({
+      title: "Proxy ayarlarını kaydet",
+      run: async (totpCode) => {
+        await API.post("/admin/save_pos_method", {
+          provider: proxyTarget.provider,
+          proxy_enabled: config.proxy_enabled,
+          proxy_mode: config.proxy_mode,
+          proxy_entry_ids: config.proxy_entry_ids,
+          totp_code: totpCode,
+        });
+        notify("Proxy ayarları kaydedildi", "success");
+        setProxyTarget(null);
+        load();
+      },
+    });
+  };
+
   return (
     <>
       <div className="page-header">
@@ -134,13 +182,14 @@ export default function PosSettingsPage() {
               <th>Min–Max (₺)</th>
               <th>Durum</th>
               <th>Credentials</th>
+              <th>Proxy</th>
               <th>İşlem</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6}>Yükleniyor...</td>
+                <td colSpan={7}>Yükleniyor...</td>
               </tr>
             ) : (
               items.map((m) => (
@@ -160,9 +209,17 @@ export default function PosSettingsPage() {
                       {m.configured ? "Yapılandırıldı" : "Eksik"}
                     </span>
                   </td>
+                  <td>
+                    <span className={`badge ${m.proxyEnabled ? "badge-blue" : "badge-cancelled"}`}>
+                      {m.proxyEnabled ? m.proxyMode : "Kapalı"}
+                    </span>
+                  </td>
                   <td className="table-actions">
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(m)}>
                       Düzenle
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setProxyTarget(m)}>
+                      Proxy
                     </button>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => requestToggle(m.provider)}>
                       {m.enabled ? "Pasif yap" : "Aktif yap"}
@@ -243,6 +300,17 @@ export default function PosSettingsPage() {
           </p>
         )}
       </Modal>
+
+      <ProxyConfigModal
+        open={proxyTarget !== null}
+        provider={proxyTarget?.provider ?? ""}
+        proxyEnabled={proxyTarget?.proxyEnabled ?? false}
+        proxyMode={proxyTarget?.proxyMode ?? "off"}
+        proxyEntryIds={proxyTarget?.proxyEntryIds ?? []}
+        poolEntries={poolEntries}
+        onClose={() => setProxyTarget(null)}
+        onSave={requestProxySave}
+      />
 
       <StepUpModal
         open={stepUp !== null}

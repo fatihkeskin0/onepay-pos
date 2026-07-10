@@ -19,6 +19,10 @@ type LoginStep = "password" | "2fa" | "setup";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [checkingSession, setCheckingSession] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !!localStorage.getItem(LS_KEYS.token);
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -33,7 +37,9 @@ export default function LoginPage() {
     const token = localStorage.getItem(LS_KEYS.token);
     if (token) {
       router.replace("/dashboard");
+      return;
     }
+    setCheckingSession(false);
   }, [router]);
 
   const finishLogin = (data: {
@@ -50,7 +56,7 @@ export default function LoginPage() {
     const theme = data.theme ?? "light";
     localStorage.setItem(LS_KEYS.theme, theme);
     document.documentElement.setAttribute("data-theme", theme);
-    router.push("/dashboard");
+    router.replace("/dashboard");
   };
 
   const loadSetup = async (token: string) => {
@@ -158,6 +164,16 @@ export default function LoginPage() {
       : step === "2fa"
         ? "Authenticator uygulamanızdaki 6 haneli kodu girin."
         : "Google Authenticator veya benzeri bir uygulama ile QR kodu tarayın, ardından kodu girin.";
+
+  if (checkingSession) {
+    return (
+      <div className="login-page">
+        <div className="app app-loading">
+          <p className="text-muted">Yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">

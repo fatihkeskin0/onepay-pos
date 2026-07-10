@@ -21,6 +21,7 @@ export const PANEL_PUBLIC_SEGMENTS = [
   "settings",
   "demo",
   "pos",
+  "proxy",
 ] as const;
 
 export type PanelPublicSegment = (typeof PANEL_PUBLIC_SEGMENTS)[number];

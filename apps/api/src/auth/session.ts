@@ -11,8 +11,12 @@ export function createSessionId(): string {
 }
 
 export async function bindSession(cashierId: number, sessionId: string): Promise<void> {
-  const redis = getRedis();
-  await redis.set(sessionKey(cashierId), sessionId, "EX", TOKEN_TTL_SEC);
+  try {
+    const redis = getRedis();
+    await redis.set(sessionKey(cashierId), sessionId, "EX", TOKEN_TTL_SEC);
+  } catch {
+    /* ignore — login still issues JWT; validateSession handles Redis outage */
+  }
 }
 
 export async function validateSession(cashierId: number, sessionId: string | undefined): Promise<

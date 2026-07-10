@@ -316,6 +316,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
         callbackUrl: `${config.api.publicUrl}${API_ROUTE_PREFIX}/psp/${provider.name}/callback`,
         userIp: getClientIp(request),
         email: `${userId}@${site.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "site"}.pay`,
+        uiTheme: site.brandTheme === "dark" ? "dark" : "light",
       });
 
       const embedStore = buildPspEmbedPayload(pspResult);

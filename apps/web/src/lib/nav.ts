@@ -23,6 +23,7 @@ export const PAGE_HREF: Record<string, string> = {
   "kas-sifre": panelHref("settings"),
   "adm-demo": panelHref("demo"),
   "adm-pos": panelHref("pos"),
+  "adm-proxy": panelHref("proxy"),
 };
 
 export const DEFAULT_PANEL_HREF = panelHref("dashboard");

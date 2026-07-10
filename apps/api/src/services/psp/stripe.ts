@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "../../config.js";
+import type { PspFetchFn } from "../proxy/types.js";
 import type { PspCallbackResult, PspPaymentInput, PspPaymentResult, PspProvider } from "./types.js";
 
 const WEBHOOK_TOLERANCE_SEC = 300;
@@ -40,6 +41,11 @@ function verifyStripeSignature(rawBody: string, sigHeader: string, secret: strin
 export class StripeProvider implements PspProvider {
   name = "stripe" as const;
   readonly renderMode = "stripe_elements" as const;
+  private readonly fetchFn: PspFetchFn;
+
+  constructor(fetchFn: PspFetchFn = (url, init) => fetch(url, init)) {
+    this.fetchFn = fetchFn;
+  }
 
   async createPayment(input: PspPaymentInput): Promise<PspPaymentResult> {
     if (!config.psp.stripe.secretKey || !config.psp.stripe.publishableKey) {
@@ -47,7 +53,7 @@ export class StripeProvider implements PspProvider {
     }
 
     try {
-      const res = await fetch("https://api.stripe.com/v1/payment_intents", {
+      const res = await this.fetchFn("https://api.stripe.com/v1/payment_intents", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.psp.stripe.secretKey}`,
@@ -147,7 +153,7 @@ export class StripeProvider implements PspProvider {
     if (!config.psp.stripe.secretKey || !providerRef) return "processing";
 
     try {
-      const res = await fetch(`https://api.stripe.com/v1/payment_intents/${providerRef}`, {
+      const res = await this.fetchFn(`https://api.stripe.com/v1/payment_intents/${providerRef}`, {
         headers: { Authorization: `Bearer ${config.psp.stripe.secretKey}` },
       });
 

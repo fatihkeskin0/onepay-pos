@@ -1,7 +1,7 @@
 import { prisma } from "@onepara/db";
 import type { DepositStatus, PspTransactionStatus } from "@onepara/db";
 
-export type ActivityCategory = "auth" | "deposit" | "member" | "deposit_edit" | "psp";
+export type ActivityCategory = "auth" | "deposit" | "member" | "deposit_edit" | "psp" | "proxy";
 
 export interface ActivityLogItem {
   id: string;
@@ -169,7 +169,7 @@ export async function getActivityLogs(params: {
   const userId = params.user_id?.trim();
   const q = params.q?.trim();
 
-  const validCategories: ActivityCategory[] = ["auth", "deposit", "member", "deposit_edit", "psp"];
+  const validCategories: ActivityCategory[] = ["auth", "deposit", "member", "deposit_edit", "psp", "proxy"];
   const cat = category && validCategories.includes(category) ? category : undefined;
 
   const fetches: Promise<ActivityLogItem[]>[] = [];

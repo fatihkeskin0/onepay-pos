@@ -9,6 +9,7 @@ export function getRedis(): Redis {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
       connectTimeout: 10_000,
+      commandTimeout: 5_000,
     });
   }
   return client;

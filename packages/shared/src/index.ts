@@ -51,6 +51,7 @@ export const ADMIN_NAV: NavItem[] = [
   { section: "İşlemler", id: "adm-dep", label: "Yatırımlar", icon: "💳", badge: "nav-badge-adm-dep" },
   { section: "İşlemler", id: "adm-export", label: "Tüm İşlemler", icon: "📋" },
   { section: "Finans", id: "adm-pos", label: "POS Ayarları", icon: "🏦" },
+  { section: "Finans", id: "adm-proxy", label: "Proxy Havuzu", icon: "🔀" },
   { section: "Finans", id: "adm-site-mutabakat", label: "Site Mutabakatı", icon: "🧾" },
   { section: "Finans", id: "adm-giris", label: "Loglar", icon: "📋" },
   { section: "Finans", id: "adm-raporlar", label: "Raporlar", icon: "📈" },
@@ -77,6 +78,7 @@ export const SLUG_TO_PAGE: Record<string, string> = {
   cashiers: "adm-kasiyerler",
   monitor: "adm-monitor",
   pos: "adm-pos",
+  proxy: "adm-proxy",
   "site-reconciliation": "adm-site-mutabakat",
   reports: "adm-raporlar",
   suspicious: "adm-supheliler",
@@ -100,6 +102,7 @@ export const PAGE_TO_SLUG: Record<string, string> = {
   "adm-kasiyerler": "cashiers",
   "adm-monitor": "monitor",
   "adm-pos": "pos",
+  "adm-proxy": "proxy",
   "adm-site-mutabakat": "site-reconciliation",
   "adm-raporlar": "reports",
   "adm-supheliler": "suspicious",
@@ -121,6 +124,9 @@ export const LS_KEYS = {
 } as const;
 
 export type PspProviderName = "paytr" | "stripe" | "sumup";
+
+export type ProxyMode = "off" | "pool_all" | "pool_selected";
+export type ProxyProtocol = "http" | "https";
 
 /** Current REST API version segment (e.g. /v1/user/...). */
 export const API_VERSION = "v1";

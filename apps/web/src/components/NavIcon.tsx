@@ -87,6 +87,15 @@ export function NavIcon({ id, active, size = 18 }: NavIconProps) {
           <path d="M6 8h.01M10 8h.01M6 12h12M6 16h8" />
         </svg>
       );
+    case "adm-proxy":
+      return (
+        <svg {...common}>
+          <path d="M7 7h10v4H7z" />
+          <path d="M3 17h8v4H3z" />
+          <path d="M13 17h8v4h-8z" />
+          <path d="M12 11v3M9 14h6" />
+        </svg>
+      );
     case "adm-site-mutabakat":
       return (
         <svg {...common}>

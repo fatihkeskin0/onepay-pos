@@ -151,7 +151,7 @@ export default function PayPage() {
     if (state !== "pending" || renderMode !== "iframe" || provider !== "paytr" || !iframeUrl) return;
 
     const script = document.createElement("script");
-    script.src = "https://www.paytr.com/js/iframeResizer.min.js";
+    script.src = "https://www.paytr.com/js/iframeResizer.min.js?v2";
     script.async = true;
     script.onload = () => {
       const w = window as Window & { iFrameResize?: (opts: object, selector: string) => void };

@@ -62,6 +62,12 @@ export class PayApiError extends ApiRequestError {
   }
 }
 
+const PAY_FETCH_TIMEOUT_MS = 20_000;
+
+function isAbortTimeout(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "TimeoutError";
+}
+
 async function payRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
@@ -69,8 +75,12 @@ async function payRequest<T>(method: string, path: string, body?: unknown): Prom
       method,
       headers: { "Content-Type": "application/json" },
       body: body != null ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(PAY_FETCH_TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    if (isAbortTimeout(err)) {
+      throw new PayApiError("Sunucu yanıt vermedi", 0, "UPSTREAM_UNAVAILABLE");
+    }
     throw new PayApiError("Bağlantı kurulamadı, lütfen tekrar deneyin.", 0, "UPSTREAM_UNAVAILABLE");
   }
 
