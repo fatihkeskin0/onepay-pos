@@ -9,6 +9,7 @@
 @import './components/tabs.css';
 @import './components/popover.css';
 @import './components/modal.css';
+@import './components/step-up.css';
 @import './components/toast.css';
 @import './components/site-logo-upload.css';
 @import './components/calendar.css';
@@ -22,4 +23,5 @@
 @import './pages/applications.css';
 @import './pages/sites.css';
 @import './pages/users.css';
+@import './pages/cashiers.css';
 @import './pages/error.css';

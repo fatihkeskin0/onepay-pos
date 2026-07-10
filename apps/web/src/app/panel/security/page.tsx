@@ -5,6 +5,7 @@ import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { StepUpModal } from "@/components/auth/StepUpModal";
+import { useStepUp } from "@/hooks/useStepUp";
 
 interface TrustedIp {
   id: number;
@@ -64,11 +65,14 @@ export default function SecurityPage() {
   const [panelForm, setPanelForm] = useState<PanelIpForm>(emptyPanelForm());
   const [panelImportOpen, setPanelImportOpen] = useState(false);
   const [panelImportText, setPanelImportText] = useState("");
-  const [stepUp, setStepUp] = useState<{
-    title: string;
-    run: (totpCode: string) => Promise<void>;
-  } | null>(null);
-  const [stepUpLoading, setStepUpLoading] = useState(false);
+  const {
+    stepUpOpen,
+    stepUpTitle,
+    stepUpLoading,
+    requestStepUp,
+    closeStepUp,
+    confirmStepUp,
+  } = useStepUp((msg) => notify(msg, "error"));
   const [fail2banFile, setFail2banFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -97,26 +101,13 @@ export default function SecurityPage() {
     load();
   }, []);
 
-  const executeStepUp = async (totpCode: string) => {
-    if (!stepUp) return;
-    setStepUpLoading(true);
-    try {
-      await stepUp.run(totpCode);
-      setStepUp(null);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    } finally {
-      setStepUpLoading(false);
-    }
-  };
-
   const requestPanelToggle = () => {
     const next = !panelEnabled;
     if (next && panelItems.filter((i) => i.is_active).length === 0) {
       notify("Önce en az bir IP ekleyin, aksi halde tüm erişim engellenir", "error");
       return;
     }
-    setStepUp({
+    requestStepUp({
       title: next ? "Panel whitelist aç" : "Panel whitelist kapat",
       run: async (totpCode) => {
         await API.post("/admin/panel_access/toggle", { enabled: next, totp_code: totpCode });
@@ -127,12 +118,12 @@ export default function SecurityPage() {
   };
 
   const requestPanelAdd = () => {
-    setStepUp({
+    requestStepUp({
       title: "Panel erişim IP ekle",
+      closeParent: () => setPanelAddOpen(false),
       run: async (totpCode) => {
         await API.post("/admin/panel_access/add", { ...panelForm, totp_code: totpCode });
         notify("IP eklendi", "success");
-        setPanelAddOpen(false);
         setPanelForm(emptyPanelForm());
         load();
       },
@@ -140,8 +131,9 @@ export default function SecurityPage() {
   };
 
   const requestPanelImport = () => {
-    setStepUp({
+    requestStepUp({
       title: "Panel IP import",
+      closeParent: () => setPanelImportOpen(false),
       run: async (totpCode) => {
         let parsed: unknown;
         try {
@@ -155,7 +147,6 @@ export default function SecurityPage() {
           totp_code: totpCode,
         });
         notify(`${result.created} eklendi, ${result.skipped} atlandı`, "success");
-        setPanelImportOpen(false);
         setPanelImportText("");
         load();
       },
@@ -163,7 +154,7 @@ export default function SecurityPage() {
   };
 
   const togglePanelIp = (item: PanelAccessIp) => {
-    setStepUp({
+    requestStepUp({
       title: item.is_active ? "Panel IP pasifleştir" : "Panel IP aktifleştir",
       run: async (totpCode) => {
         await API.put(`/admin/panel_access/${item.id}`, {
@@ -178,7 +169,7 @@ export default function SecurityPage() {
 
   const removePanelIp = (item: PanelAccessIp) => {
     if (!window.confirm(`${item.cidr} silinsin mi?`)) return;
-    setStepUp({
+    requestStepUp({
       title: "Panel IP sil",
       run: async (totpCode) => {
         await API.delete(`/admin/panel_access/${item.id}`, { totp_code: totpCode });
@@ -515,11 +506,11 @@ export default function SecurityPage() {
       </Modal>
 
       <StepUpModal
-        open={stepUp !== null}
-        title={stepUp?.title}
+        open={stepUpOpen}
+        title={stepUpTitle}
         loading={stepUpLoading}
-        onClose={() => setStepUp(null)}
-        onConfirm={executeStepUp}
+        onClose={closeStepUp}
+        onConfirm={confirmStepUp}
       />
     </>
   );

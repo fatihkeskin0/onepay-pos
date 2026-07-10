@@ -13,6 +13,7 @@ interface ModalProps {
   className?: string;
   overlayClassName?: string;
   subtitle?: string;
+  layer?: "default" | "step-up";
 }
 
 export function Modal({
@@ -25,6 +26,7 @@ export function Modal({
   className = "",
   overlayClassName = "",
   subtitle,
+  layer = "default",
 }: ModalProps) {
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -43,7 +45,7 @@ export function Modal({
 
   return (
     <div
-      className={`modal-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`.trim()}
+      className={`modal-overlay${layer === "step-up" ? " modal-overlay--step-up" : ""}${overlayClassName ? ` ${overlayClassName}` : ""}`.trim()}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

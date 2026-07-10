@@ -1,0 +1,78 @@
+.modal-overlay--step-up {
+  z-index: var(--z-step-up);
+}
+
+.step-up-modal .step-up-message {
+  margin: 0 0 var(--space-4);
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.step-up-modal .auth-field {
+  margin-bottom: 0;
+}
+
+.step-up-modal .auth-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+
+.step-up-modal .auth-field-control {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.step-up-modal .auth-field-control:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.step-up-modal .auth-field-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  margin-right: 10px;
+  color: var(--muted);
+}
+
+.step-up-modal .auth-field-control:focus-within .auth-field-icon {
+  color: var(--accent);
+}
+
+.step-up-modal .auth-field-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+}
+
+.step-up-modal .auth-field-input::placeholder {
+  color: var(--muted);
+}
+
+.step-up-modal .auth-field-control--otp .auth-field-input {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.32em;
+  text-align: center;
+}

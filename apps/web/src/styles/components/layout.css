@@ -115,3 +115,14 @@
   margin-top: var(--space-4);
 }
 .logs-page-info { font-size: var(--text-sm); color: var(--muted); }
+.logs-title-cell { max-width: 360px; word-break: break-word; font-size: var(--text-sm); }
+
+.log-detail { display: flex; flex-direction: column; gap: var(--space-4); }
+.log-detail-section { border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
+.log-detail-section:first-child { border-top: none; padding-top: 0; }
+.log-detail-heading { font-size: var(--text-sm); font-weight: 700; margin: 0 0 var(--space-2); color: var(--text); }
+.log-detail-dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0; font-size: var(--text-sm); }
+.log-detail-dl dt { color: var(--muted); font-weight: 500; }
+.log-detail-dl dd { margin: 0; word-break: break-word; }
+.log-detail-text { margin: 0; font-size: var(--text-sm); color: var(--text); }
+.log-detail-payload-row { display: contents; }

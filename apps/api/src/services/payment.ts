@@ -49,6 +49,15 @@ export async function approveDeposit(
     }
   }
 
+  let processedBy: string | undefined;
+  if (cashierId > 0) {
+    const actor = await prisma.cashier.findUnique({
+      where: { id: cashierId },
+      select: { username: true },
+    });
+    processedBy = actor?.username ?? undefined;
+  }
+
   const approved = await prisma.$transaction(async (tx) => {
     const updated = await tx.deposit.updateMany({
       where: { id: depositId, status: "pending" },
@@ -58,6 +67,7 @@ export async function approveDeposit(
         approvedAt: new Date(),
         commissionRate,
         commissionAmount,
+        processedByAdminUsername: processedBy ?? null,
       },
     });
 
@@ -88,6 +98,15 @@ export async function rejectDeposit(
   cashierId: number,
   reason = "",
 ): Promise<Awaited<ReturnType<typeof getDeposit>>> {
+  let processedBy: string | undefined;
+  if (cashierId > 0) {
+    const actor = await prisma.cashier.findUnique({
+      where: { id: cashierId },
+      select: { username: true },
+    });
+    processedBy = actor?.username ?? undefined;
+  }
+
   const updated = await prisma.deposit.updateMany({
     where: { id: depositId, status: "pending" },
     data: {
@@ -95,6 +114,7 @@ export async function rejectDeposit(
       cashierId,
       rejectReason: reason,
       approvedAt: new Date(),
+      processedByAdminUsername: processedBy ?? null,
     },
   });
 

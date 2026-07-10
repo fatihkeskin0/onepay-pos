@@ -7,6 +7,7 @@ import { panelHref } from "@/lib/panel-routes";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { StepUpModal } from "@/components/auth/StepUpModal";
+import { useStepUp } from "@/hooks/useStepUp";
 import { useClientSession } from "@/hooks/useClientSession";
 
 interface Deposit {
@@ -47,24 +48,14 @@ export default function DepositsPage() {
   const [rejectModal, setRejectModal] = useState<{ id: number; reason: string } | null>(null);
   const [editModal, setEditModal] = useState<{ id: number; amount: string; logs: EditLog[] } | null>(null);
 
-  const [stepUp, setStepUp] = useState<{
-    title: string;
-    run: (totpCode: string) => Promise<void>;
-  } | null>(null);
-  const [stepUpLoading, setStepUpLoading] = useState(false);
-
-  const executeStepUp = async (totpCode: string) => {
-    if (!stepUp) return;
-    setStepUpLoading(true);
-    try {
-      await stepUp.run(totpCode);
-      setStepUp(null);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    } finally {
-      setStepUpLoading(false);
-    }
-  };
+  const {
+    stepUpOpen,
+    stepUpTitle,
+    stepUpLoading,
+    requestStepUp,
+    closeStepUp,
+    confirmStepUp,
+  } = useStepUp((msg) => notify(msg, "error"));
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -110,7 +101,7 @@ export default function DepositsPage() {
   };
 
   const approve = (id: number) => {
-    setStepUp({
+    requestStepUp({
       title: "Yatırımı onayla",
       run: async (totpCode) => {
         await API.post("/cashier/approve_deposit", { id, totp_code: totpCode });
@@ -124,7 +115,7 @@ export default function DepositsPage() {
     if (!rejectModal) return;
     const { id, reason } = rejectModal;
     setRejectModal(null);
-    setStepUp({
+    requestStepUp({
       title: "Yatırımı reddet",
       run: async (totpCode) => {
         await API.post("/cashier/reject_deposit", { id, reason, totp_code: totpCode });
@@ -137,8 +128,9 @@ export default function DepositsPage() {
   const requestEditAmount = () => {
     if (!editModal) return;
     const { id, amount } = editModal;
-    setStepUp({
+    requestStepUp({
       title: "Tutar güncelle",
+      closeParent: () => setEditModal(null),
       run: async (totpCode) => {
         await API.post("/admin/update_deposit_amount", {
           id,
@@ -146,7 +138,6 @@ export default function DepositsPage() {
           totp_code: totpCode,
         });
         notify("Tutar güncellendi", "success");
-        setEditModal(null);
         reload();
       },
     });
@@ -386,11 +377,11 @@ export default function DepositsPage() {
       </Modal>
 
       <StepUpModal
-        open={stepUp !== null}
-        title={stepUp?.title}
+        open={stepUpOpen}
+        title={stepUpTitle}
         loading={stepUpLoading}
-        onClose={() => setStepUp(null)}
-        onConfirm={executeStepUp}
+        onClose={closeStepUp}
+        onConfirm={confirmStepUp}
       />
     </>
   );

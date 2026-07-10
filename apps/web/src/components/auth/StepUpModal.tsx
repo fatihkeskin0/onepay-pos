@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { AuthField } from "@/components/auth/AuthField";
 
@@ -23,6 +23,10 @@ export function StepUpModal({
 }: StepUpModalProps) {
   const [code, setCode] = useState("");
 
+  useEffect(() => {
+    if (!open) setCode("");
+  }, [open]);
+
   const handleClose = () => {
     if (loading) return;
     setCode("");
@@ -40,6 +44,8 @@ export function StepUpModal({
       open={open}
       title={title}
       onClose={handleClose}
+      layer="step-up"
+      className="step-up-modal"
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={handleClose} disabled={loading}>
@@ -47,16 +53,23 @@ export function StepUpModal({
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className={`btn btn-primary${loading ? " btn-loading" : ""}`}
             onClick={handleConfirm}
             disabled={loading || code.length !== 6}
           >
-            {loading ? "Doğrulanıyor…" : "Onayla"}
+            {loading ? (
+              <>
+                <span className="btn-spinner" aria-hidden />
+                Doğrulanıyor…
+              </>
+            ) : (
+              "Onayla"
+            )}
           </button>
         </>
       }
     >
-      <p className="settings-note mb-3">{message}</p>
+      <p className="step-up-message">{message}</p>
       <AuthField
         label="6 haneli kod"
         fieldType="otp"
@@ -66,6 +79,7 @@ export function StepUpModal({
         maxLength={6}
         inputMode="numeric"
         autoComplete="one-time-code"
+        autoFocus
         required
         disabled={loading}
       />

@@ -40,6 +40,7 @@ import {
 import type { ProxyImportItem } from "../services/proxy/types.js";
 import { byIp } from "../services/rate-limit.js";
 import { buildDashboardStats, resolveDashboardRange } from "../services/dashboard-stats.js";
+import { recordSystemActivity } from "../services/system-activity.js";
 
 const PAYMENT_LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -113,6 +114,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         depCommissionRate: Number(body.dep_commission_rate ?? 0),
       },
     });
+    await recordSystemActivity(request, user, {
+      category: "site",
+      action: "add_site",
+      title: `Site eklendi: ${site.name}`,
+      target: `site:${site.id}`,
+      payload: { site_id: site.id, name: site.name },
+    });
     ok(reply, { site });
   });
 
@@ -134,6 +142,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         isActive: body.is_active != null ? Boolean(body.is_active) : undefined,
         depCommissionRate: body.dep_commission_rate != null ? Number(body.dep_commission_rate) : undefined,
       },
+    });
+    await recordSystemActivity(request, user, {
+      category: "site",
+      action: "update_site",
+      title: `Site güncellendi: ${site.name}`,
+      target: `site:${site.id}`,
+      payload: { site_id: site.id, name: site.name, is_active: site.isActive },
     });
     ok(reply, { site });
   });
@@ -167,6 +182,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         String(body.content_base64 ?? ""),
       );
       await prisma.site.update({ where: { id: siteId }, data: { brandLogoUrl: logoUrl } });
+      await recordSystemActivity(request, user, {
+        category: "site",
+        action: "upload_site_logo",
+        title: `Site logosu yüklendi: ${site.name}`,
+        target: `site:${siteId}`,
+        payload: { site_id: siteId, name: site.name, logo_url: logoUrl },
+      });
       ok(reply, { url: logoUrl });
     } catch (e) {
       error(reply, e instanceof Error ? e.message : "Logo yüklenemedi", 422);
@@ -183,13 +205,41 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
     const updated = await prisma.site.update({ where: { id }, data: { isActive: !site.isActive } });
+    await recordSystemActivity(request, user, {
+      category: "site",
+      action: "toggle_site",
+      title: `Site ${updated.isActive ? "aktifleştirildi" : "pasifleştirildi"}: ${updated.name}`,
+      target: `site:${updated.id}`,
+      payload: { site_id: updated.id, name: updated.name, is_active: updated.isActive },
+    });
     ok(reply, { site: updated });
   });
 
   app.get("/cashiers", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
-    const items = await prisma.cashier.findMany({ orderBy: { username: "asc" } });
+    const rows = await prisma.cashier.findMany({
+      orderBy: { username: "asc" },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        commissionRate: true,
+        isActive: true,
+        totpEnabled: true,
+        telegramChatId: true,
+        adminNote: true,
+        lastLogin: true,
+        lastSeenAt: true,
+        createdAt: true,
+        ipLockEnabled: true,
+      },
+    });
+    const onlineThreshold = Date.now() - 5 * 60 * 1000;
+    const items = rows.map((c) => ({
+      ...c,
+      online: c.lastSeenAt ? c.lastSeenAt.getTime() > onlineThreshold : false,
+    }));
     ok(reply, { items });
   });
 
@@ -204,6 +254,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         role: (body.role as "kasiyer" | "admin") ?? "kasiyer",
         commissionRate: Number(body.commission_rate ?? 5),
       },
+      select: { id: true, username: true, role: true, commissionRate: true, isActive: true },
+    });
+    await recordSystemActivity(request, user, {
+      category: "cashier",
+      action: "add_cashier",
+      title: `Agent eklendi: ${cashier.username}`,
+      target: `cashier:${cashier.id}`,
+      payload: { cashier_id: cashier.id, username: cashier.username, role: cashier.role, commission_rate: cashier.commissionRate },
     });
     ok(reply, { cashier });
   });
@@ -221,7 +279,20 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (body.telegram_chat_id != null) data.telegramChatId = String(body.telegram_chat_id) || null;
     if (body.admin_note != null) data.adminNote = String(body.admin_note) || null;
     const cashier = await prisma.cashier.update({ where: { id }, data });
-    ok(reply, { cashier });
+    await recordSystemActivity(request, user, {
+      category: "cashier",
+      action: body.password ? "reset_cashier_password" : "update_cashier",
+      title: body.password ? `Agent şifresi sıfırlandı: ${cashier.username}` : `Agent güncellendi: ${cashier.username}`,
+      target: `cashier:${cashier.id}`,
+      payload: {
+        cashier_id: cashier.id,
+        username: cashier.username,
+        is_active: cashier.isActive,
+        commission_rate: cashier.commissionRate,
+        password_reset: !!body.password,
+      },
+    });
+    ok(reply, { cashier: { id: cashier.id, username: cashier.username, role: cashier.role, commissionRate: cashier.commissionRate, isActive: cashier.isActive } });
   });
 
   app.post("/toggle_cashier", async (request, reply) => {
@@ -234,14 +305,29 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
     const updated = await prisma.cashier.update({ where: { id }, data: { isActive: !c.isActive } });
-    ok(reply, { cashier: updated });
+    await recordSystemActivity(request, user, {
+      category: "cashier",
+      action: "toggle_cashier",
+      title: `Agent ${updated.isActive ? "aktifleştirildi" : "pasifleştirildi"}: ${updated.username}`,
+      target: `cashier:${updated.id}`,
+      payload: { cashier_id: updated.id, username: updated.username, is_active: updated.isActive },
+    });
+    ok(reply, { cashier: { id: updated.id, username: updated.username, isActive: updated.isActive } });
   });
 
   app.post("/force_logout", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user || !(await requireStepUp(request, reply, user.id))) return;
     const id = Number((request.body as { id?: number }).id);
+    const target = await prisma.cashier.findUnique({ where: { id }, select: { username: true } });
     await prisma.cashier.update({ where: { id }, data: { tokenVersion: { increment: 1 } } });
+    await recordSystemActivity(request, user, {
+      category: "cashier",
+      action: "force_logout",
+      title: `Agent oturumu sonlandırıldı: ${target?.username ?? id}`,
+      target: `cashier:${id}`,
+      payload: { cashier_id: id, username: target?.username },
+    });
     ok(reply, {});
   });
 
@@ -296,6 +382,19 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const updated = await prisma.deposit.update({
       where: { id: deposit.id },
       data: { amount: body.amount ?? deposit.amount },
+    });
+    await recordSystemActivity(request, user, {
+      category: "deposit",
+      action: "update_deposit_amount",
+      title: `Yatırım tutarı düzenlendi: ${deposit.reference}`,
+      userId: deposit.userId,
+      target: `deposit:${deposit.id}`,
+      payload: {
+        deposit_id: deposit.id,
+        reference: deposit.reference,
+        old_amount: deposit.amount.toString(),
+        new_amount: String(body.amount ?? deposit.amount),
+      },
     });
     ok(reply, { deposit: updated });
   });
@@ -384,6 +483,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       await prisma.setting.upsert({ where: { key }, update: { value: normalized }, create: { key, value: normalized } });
       await invalidateSettingCache(key);
     }
+    const keys = Object.keys(body);
+    await recordSystemActivity(request, user, {
+      category: "settings",
+      action: "update_settings",
+      title: `Ayarlar güncellendi (${keys.length} anahtar)`,
+      payload: { keys },
+    });
     ok(reply, {});
   });
 
@@ -413,6 +519,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       const result = await syncCloudflare({
         dns: body.dns !== false,
         ssl: body.ssl !== false,
+      });
+      await recordSystemActivity(request, user, {
+        category: "settings",
+        action: "cloudflare_sync",
+        title: "Cloudflare senkronizasyonu çalıştırıldı",
+        payload: { dns: body.dns !== false, ssl: body.ssl !== false, result },
       });
       ok(reply, result as unknown as Record<string, unknown>);
     } catch (err) {
@@ -450,6 +562,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       if (body.sync_now === true) {
         await syncTrustedIpIntegrations();
       }
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "add_trusted_ip",
+        title: `Güvenilir IP eklendi: ${item.cidr}`,
+        target: `trusted_ip:${item.id}`,
+        payload: { id: item.id, cidr: item.cidr, label: item.label },
+      });
       ok(reply, { item });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Eklenemedi", 400);
@@ -478,6 +597,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       if (body.sync_now === true) {
         await syncTrustedIpIntegrations();
       }
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "update_trusted_ip",
+        title: `Güvenilir IP güncellendi: ${item.cidr}`,
+        target: `trusted_ip:${item.id}`,
+        payload: { id: item.id, cidr: item.cidr, label: item.label, is_active: item.is_active },
+      });
       ok(reply, { item });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Güncellenemedi", 400);
@@ -494,12 +620,20 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
     try {
+      const existing = await prisma.trustedIp.findUnique({ where: { id } });
       await deleteTrustedIp(id);
       try {
         await exportFail2banIgnoreFile();
       } catch {
         /* optional export */
       }
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "delete_trusted_ip",
+        title: `Güvenilir IP silindi: ${existing?.cidr ?? id}`,
+        target: `trusted_ip:${id}`,
+        payload: { id, cidr: existing?.cidr, label: existing?.label },
+      });
       ok(reply, {});
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Silinemedi", 400);
@@ -511,6 +645,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!user) return;
     try {
       const result = await syncTrustedIpIntegrations();
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "sync_trusted_ips",
+        title: "Güvenilir IP entegrasyonları senkronize edildi",
+        payload: result as unknown as Record<string, unknown>,
+      });
       ok(reply, result as unknown as Record<string, unknown>);
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Senkron başarısız", 500);
@@ -596,9 +736,16 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    await prisma.merchantApplication.update({
+    const updated = await prisma.merchantApplication.update({
       where: { id },
       data: { status: status as "new" | "reviewed" | "archived" },
+    });
+    await recordSystemActivity(request, user, {
+      category: "settings",
+      action: "update_application_status",
+      title: `Başvuru durumu güncellendi: ${updated.companyName}`,
+      target: `application:${id}`,
+      payload: { application_id: id, company_name: updated.companyName, status },
     });
     ok(reply, {});
   });
@@ -624,6 +771,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
           isActive: body.is_active ?? true,
         },
       });
+      await recordSystemActivity(request, user, {
+        category: "settings",
+        action: "save_announcement",
+        title: `Duyuru güncellendi: ${ann.title}`,
+        target: `announcement:${ann.id}`,
+        payload: { announcement_id: ann.id, title: ann.title, is_active: ann.isActive },
+      });
       ok(reply, { announcement: ann });
       return;
     }
@@ -634,13 +788,29 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         type: (body.type as "info" | "warning" | "success") ?? "info",
       },
     });
+    await recordSystemActivity(request, user, {
+      category: "settings",
+      action: "save_announcement",
+      title: `Duyuru eklendi: ${ann.title}`,
+      target: `announcement:${ann.id}`,
+      payload: { announcement_id: ann.id, title: ann.title },
+    });
     ok(reply, { announcement: ann });
   });
 
   app.post("/delete_announcement", async (request, reply) => {
     const user = await requireAuth(request, reply, "admin");
     if (!user) return;
-    await prisma.announcement.delete({ where: { id: Number((request.body as { id?: number }).id) } });
+    const annId = Number((request.body as { id?: number }).id);
+    const existing = await prisma.announcement.findUnique({ where: { id: annId } });
+    await prisma.announcement.delete({ where: { id: annId } });
+    await recordSystemActivity(request, user, {
+      category: "settings",
+      action: "delete_announcement",
+      title: `Duyuru silindi: ${existing?.title ?? annId}`,
+      target: `announcement:${annId}`,
+      payload: { announcement_id: annId, title: existing?.title },
+    });
     ok(reply, {});
   });
 
@@ -846,7 +1016,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const saved = await prisma.posMethod.findUnique({ where: { provider } });
-    ok(reply, { method: saved ?? method });
+    const methodRow = saved ?? method;
+    await recordSystemActivity(request, user, {
+      category: "pos",
+      action: "save_pos_method",
+      title: `POS yöntemi kaydedildi: ${methodRow.label}`,
+      target: `pos:${provider}`,
+      payload: { provider, label: methodRow.label, enabled: methodRow.enabled },
+    });
+    ok(reply, { method: methodRow });
   });
 
   app.post("/toggle_pos_method", async (request, reply) => {
@@ -866,6 +1044,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const updated = await prisma.posMethod.findUnique({ where: { provider } });
+    await recordSystemActivity(request, user, {
+      category: "pos",
+      action: "toggle_pos_method",
+      title: `POS yöntemi ${updated?.enabled ? "etkinleştirildi" : "devre dışı"}: ${updated?.label ?? provider}`,
+      target: `pos:${provider}`,
+      payload: { provider, label: updated?.label, enabled: updated?.enabled },
+    });
     ok(reply, { method: updated });
   });
 
@@ -886,6 +1071,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as ProxyImportItem;
     try {
       const item = await addProxyPoolEntry(body);
+      await recordSystemActivity(request, user, {
+        category: "proxy",
+        action: "add_proxy",
+        title: `Proxy eklendi: ${item.label}`,
+        target: `proxy:${item.id}`,
+        payload: { proxy_id: item.id, label: item.label, host: item.host },
+      });
       ok(reply, { item });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Eklenemedi", 422);
@@ -900,6 +1092,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as { items?: ProxyImportItem[] };
     try {
       const result = await importProxyPoolEntries(body.items ?? []);
+      await recordSystemActivity(request, user, {
+        category: "proxy",
+        action: "import_proxy",
+        title: `Proxy toplu içe aktarma (${result.created} kayıt)`,
+        payload: result as Record<string, unknown>,
+      });
       ok(reply, result);
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Import başarısız", 422);
@@ -924,6 +1122,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         password: body.password != null ? String(body.password) : undefined,
         clear_password: body.clear_password === true,
       });
+      await recordSystemActivity(request, user, {
+        category: "proxy",
+        action: "update_proxy",
+        title: `Proxy güncellendi: ${item.label}`,
+        target: `proxy:${item.id}`,
+        payload: { proxy_id: item.id, label: item.label, is_active: item.is_active },
+      });
       ok(reply, { item });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Güncellenemedi", 422);
@@ -939,7 +1144,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
     try {
+      const existing = await prisma.proxyPoolEntry.findUnique({ where: { id } });
       await deleteProxyPoolEntry(id);
+      await recordSystemActivity(request, user, {
+        category: "proxy",
+        action: "delete_proxy",
+        title: `Proxy silindi: ${existing?.label ?? id}`,
+        target: `proxy:${id}`,
+        payload: { proxy_id: id, label: existing?.label, host: existing?.host },
+      });
       ok(reply, {});
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Silinemedi", 422);
@@ -964,6 +1177,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const enabled = Boolean((request.body as { enabled?: boolean }).enabled);
     try {
       await setPanelAccessEnabled(enabled);
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "toggle_panel_access",
+        title: `Panel IP kısıtlaması ${enabled ? "etkinleştirildi" : "devre dışı"}`,
+        payload: { enabled },
+      });
       ok(reply, { enabled });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Güncellenemedi", 500);
@@ -979,6 +1198,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         cidr: String(body.cidr ?? ""),
         label: String(body.label ?? ""),
         note: body.note != null ? String(body.note) : undefined,
+      });
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "add_panel_access",
+        title: `Panel whitelist IP eklendi: ${item.cidr}`,
+        target: `panel_access:${item.id}`,
+        payload: { id: item.id, cidr: item.cidr, label: item.label },
       });
       ok(reply, { item });
     } catch (err) {
@@ -1002,6 +1228,13 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         note: body.note !== undefined ? (body.note ? String(body.note) : null) : undefined,
         is_active: body.is_active !== undefined ? Boolean(body.is_active) : undefined,
       });
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "update_panel_access",
+        title: `Panel whitelist IP güncellendi: ${item.cidr}`,
+        target: `panel_access:${item.id}`,
+        payload: { id: item.id, cidr: item.cidr, label: item.label, is_active: item.is_active },
+      });
       ok(reply, { item });
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Güncellenemedi", 422);
@@ -1017,7 +1250,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
     try {
+      const existing = await prisma.panelAccessIp.findUnique({ where: { id } });
       await deletePanelAccessIp(id);
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "delete_panel_access",
+        title: `Panel whitelist IP silindi: ${existing?.cidr ?? id}`,
+        target: `panel_access:${id}`,
+        payload: { id, cidr: existing?.cidr, label: existing?.label },
+      });
       ok(reply, {});
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Silinemedi", 422);
@@ -1030,6 +1271,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const body = request.body as { items?: Array<{ cidr: string; label: string; note?: string }> };
     try {
       const result = await importPanelAccessIps(body.items ?? []);
+      await recordSystemActivity(request, user, {
+        category: "security",
+        action: "import_panel_access",
+        title: `Panel whitelist toplu içe aktarma (${result.created} kayıt)`,
+        payload: result as Record<string, unknown>,
+      });
       ok(reply, result);
     } catch (err) {
       error(reply, err instanceof Error ? err.message : "Import başarısız", 422);

@@ -20,6 +20,7 @@ import { enforcePanelAccess } from "../services/access/enforce.js";
 import { approveDeposit, rejectDeposit } from "../services/payment.js";
 import { depositApproved, depositRejected, depositUrl, getSiteCallback } from "../services/callback.js";
 import { getCashierSiteIds, cashierCanAccessSite } from "../services/cashier-sites.js";
+import { recordSystemActivity } from "../services/system-activity.js";
 import { collectSystemStatus } from "../services/system-health.js";
 import { buildDashboardStats, buildHourlyStats, resolveDashboardRange } from "../services/dashboard-stats.js";
 
@@ -113,6 +114,12 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
     const clientIp = getClientIp(request);
     const session = await completeLoginSession(cashier, clientIp);
+    await recordSystemActivity(request, { id: cashier.id, role: cashier.role as "admin" | "kasiyer", exp: 0 }, {
+      category: "auth",
+      action: "setup_2fa",
+      title: `2FA kurulumu tamamlandı: ${cashier.username}`,
+      payload: { cashier_id: cashier.id, username: cashier.username, role: cashier.role },
+    });
     ok(reply, { ...session });
   });
 
@@ -138,6 +145,12 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
 
     const clientIp = getClientIp(request);
     const session = await completeLoginSession(cashier, clientIp);
+    await recordSystemActivity(request, { id: cashier.id, role: cashier.role as "admin" | "kasiyer", exp: 0 }, {
+      category: "auth",
+      action: "login",
+      title: `Panele giriş yapıldı: ${cashier.username}`,
+      payload: { cashier_id: cashier.id, username: cashier.username, role: cashier.role },
+    });
     ok(reply, { ...session });
   });
 
@@ -154,6 +167,15 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
       await prisma.loginLog.updateMany({
         where: { id: body.log_id, loggedOutAt: null },
         data: { loggedOutAt: new Date() },
+      });
+    }
+    if (user) {
+      const cashier = await prisma.cashier.findUnique({ where: { id: user.id }, select: { username: true, role: true } });
+      await recordSystemActivity(request, user, {
+        category: "auth",
+        action: "logout",
+        title: `Panelden çıkış yapıldı: ${cashier?.username ?? user.id}`,
+        payload: { cashier_id: user.id, username: cashier?.username, role: cashier?.role ?? user.role },
       });
     }
     ok(reply, {});
@@ -243,6 +265,20 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    await recordSystemActivity(request, user, {
+      category: "deposit",
+      action: "approve_deposit",
+      title: `Yatırım onaylandı: ${approved.reference}`,
+      userId: approved.userId,
+      target: `deposit:${approved.id}`,
+      payload: {
+        deposit_id: approved.id,
+        reference: approved.reference,
+        amount: approved.amount.toString(),
+        user_id: approved.userId,
+      },
+    });
+
     ok(reply, { approved: true });
   });
 
@@ -272,6 +308,21 @@ export async function cashierRoutes(app: FastifyInstance): Promise<void> {
         if (url) await depositRejected(rejected, siteCb.apiKey, url);
       }
     }
+
+    await recordSystemActivity(request, user, {
+      category: "deposit",
+      action: "reject_deposit",
+      title: `Yatırım reddedildi: ${rejected.reference}`,
+      userId: rejected.userId,
+      target: `deposit:${rejected.id}`,
+      payload: {
+        deposit_id: rejected.id,
+        reference: rejected.reference,
+        amount: rejected.amount.toString(),
+        user_id: rejected.userId,
+        reason: String(body.reason ?? ""),
+      },
+    });
 
     ok(reply, { rejected: true });
   });

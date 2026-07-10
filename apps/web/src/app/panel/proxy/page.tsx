@@ -5,6 +5,7 @@ import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { StepUpModal } from "@/components/auth/StepUpModal";
+import { useStepUp } from "@/hooks/useStepUp";
 
 interface ProxyPoolEntry {
   id: number;
@@ -45,11 +46,14 @@ export default function ProxyPoolPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [form, setForm] = useState<ProxyForm>(emptyForm());
-  const [stepUp, setStepUp] = useState<{
-    title: string;
-    run: (totpCode: string) => Promise<void>;
-  } | null>(null);
-  const [stepUpLoading, setStepUpLoading] = useState(false);
+  const {
+    stepUpOpen,
+    stepUpTitle,
+    stepUpLoading,
+    requestStepUp,
+    closeStepUp,
+    confirmStepUp,
+  } = useStepUp((msg) => notify(msg, "error"));
 
   const load = async () => {
     setLoading(true);
@@ -67,22 +71,10 @@ export default function ProxyPoolPage() {
     load();
   }, []);
 
-  const executeStepUp = async (totpCode: string) => {
-    if (!stepUp) return;
-    setStepUpLoading(true);
-    try {
-      await stepUp.run(totpCode);
-      setStepUp(null);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    } finally {
-      setStepUpLoading(false);
-    }
-  };
-
   const requestAdd = () => {
-    setStepUp({
+    requestStepUp({
       title: "Proxy ekle",
+      closeParent: () => setAddOpen(false),
       run: async (totpCode) => {
         await API.post("/admin/proxy_pool", {
           ...form,
@@ -90,7 +82,6 @@ export default function ProxyPoolPage() {
           totp_code: totpCode,
         });
         notify("Proxy eklendi", "success");
-        setAddOpen(false);
         setForm(emptyForm());
         load();
       },
@@ -98,8 +89,9 @@ export default function ProxyPoolPage() {
   };
 
   const requestImport = () => {
-    setStepUp({
+    requestStepUp({
       title: "Proxy havuzu import",
+      closeParent: () => setImportOpen(false),
       run: async (totpCode) => {
         let parsed: unknown;
         try {
@@ -113,7 +105,6 @@ export default function ProxyPoolPage() {
           totp_code: totpCode,
         });
         notify(`${result.created} eklendi, ${result.skipped} atlandı`, "success");
-        setImportOpen(false);
         setImportText("");
         load();
       },
@@ -121,7 +112,7 @@ export default function ProxyPoolPage() {
   };
 
   const requestToggle = (item: ProxyPoolEntry) => {
-    setStepUp({
+    requestStepUp({
       title: item.is_active ? "Proxy pasifleştir" : "Proxy aktifleştir",
       run: async (totpCode) => {
         await API.put(`/admin/proxy_pool/${item.id}`, {
@@ -136,7 +127,7 @@ export default function ProxyPoolPage() {
 
   const requestDelete = (item: ProxyPoolEntry) => {
     if (!window.confirm(`${item.label} silinsin mi?`)) return;
-    setStepUp({
+    requestStepUp({
       title: "Proxy sil",
       run: async (totpCode) => {
         await API.delete(`/admin/proxy_pool/${item.id}`, { totp_code: totpCode });
@@ -291,11 +282,11 @@ export default function ProxyPoolPage() {
       </Modal>
 
       <StepUpModal
-        open={stepUp !== null}
-        title={stepUp?.title}
+        open={stepUpOpen}
+        title={stepUpTitle}
         loading={stepUpLoading}
-        onClose={() => setStepUp(null)}
-        onConfirm={executeStepUp}
+        onClose={closeStepUp}
+        onConfirm={confirmStepUp}
       />
     </>
   );

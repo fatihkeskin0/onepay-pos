@@ -2,81 +2,60 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { API } from "@/lib/api";
-import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { LogDetailModal, type LogDetailItem } from "@/components/logs/LogDetailModal";
 
-type LogCategory = "auth" | "deposit" | "member" | "deposit_edit" | "psp";
+type LogCategory =
+  | ""
+  | "auth"
+  | "deposit"
+  | "member"
+  | "deposit_edit"
+  | "psp"
+  | "admin"
+  | "security"
+  | "proxy"
+  | "pos";
 
-interface LogItem {
-  id: string;
-  category: LogCategory;
-  action: string;
-  userId?: string;
-  actor?: string;
-  amount?: string;
-  status?: string;
-  detail?: string;
-  ip?: string;
-  createdAt: string;
-}
-
-const CATEGORIES: { id: "" | LogCategory; label: string }[] = [
+const CATEGORIES: { id: LogCategory; label: string }[] = [
   { id: "", label: "Tümü" },
   { id: "auth", label: "Giriş" },
   { id: "deposit", label: "Yatırım" },
   { id: "member", label: "Üye" },
-  { id: "deposit_edit", label: "Düzenleme" },
   { id: "psp", label: "PSP" },
+  { id: "admin", label: "Admin" },
+  { id: "security", label: "Güvenlik" },
+  { id: "proxy", label: "Proxy" },
+  { id: "pos", label: "POS" },
 ];
 
-const CATEGORY_LABEL: Record<LogCategory, string> = {
+const CATEGORY_LABEL: Record<string, string> = {
   auth: "Giriş",
   deposit: "Yatırım",
   member: "Üye",
   deposit_edit: "Düzenleme",
   psp: "PSP",
+  admin: "Admin",
+  cashier: "Agent",
+  site: "Site",
+  settings: "Ayarlar",
+  security: "Güvenlik",
+  proxy: "Proxy",
+  pos: "POS",
 };
-
-const ACTION_LABEL: Record<string, string> = {
-  login: "Giriş",
-  logout: "Çıkış",
-  created: "Oluşturuldu",
-  approved: "Onaylandı",
-  rejected: "Reddedildi",
-  cancelled: "İptal",
-  amount_edit: "Tutar düzenleme",
-  bet: "Bahis",
-  win: "Kazanç",
-  credit: "Kredi",
-  debit: "Borç",
-  rollback: "Geri alma",
-  initiated: "Başlatıldı",
-  processing: "İşleniyor",
-  succeeded: "Başarılı",
-  paid: "Ödendi",
-  failed: "Başarısız",
-  refunded: "İade",
-};
-
-function statusVariant(status?: string): "pending" | "approved" | "rejected" | "cancelled" | "gray" {
-  if (!status) return "gray";
-  if (status === "pending" || status === "initiated" || status === "processing") return "pending";
-  if (status === "approved" || status === "paid" || status === "completed" || status === "succeeded") return "approved";
-  if (status === "rejected" || status === "failed") return "rejected";
-  if (status === "cancelled" || status === "refunded") return "cancelled";
-  return "gray";
-}
 
 export default function LogsPage() {
-  const [items, setItems] = useState<LogItem[]>([]);
+  const [items, setItems] = useState<LogDetailItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState<"" | LogCategory>("");
+  const [category, setCategory] = useState<LogCategory>("");
   const [userId, setUserId] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [filterKey, setFilterKey] = useState(0);
+  const [detailItem, setDetailItem] = useState<LogDetailItem | null>(null);
   const limit = 50;
 
   const load = useCallback(async () => {
@@ -87,7 +66,7 @@ export default function LogsPage() {
       if (userId.trim()) params.set("user_id", userId.trim());
       if (search.trim()) params.set("q", search.trim());
 
-      const data = await API.get<{ items: LogItem[]; total: number }>(`/admin/logs?${params.toString()}`);
+      const data = await API.get<{ items: LogDetailItem[]; total: number }>(`/admin/logs?${params.toString()}`);
       setItems(data.items ?? []);
       setTotal(data.total ?? 0);
     } catch {
@@ -114,7 +93,7 @@ export default function LogsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Loglar</div>
-          <div className="page-sub">Giriş, yatırım, üye işlemleri ve PSP kayıtları</div>
+          <div className="page-sub">Sistem aktivitesi, giriş, yatırım ve admin işlemleri</div>
         </div>
       </div>
 
@@ -143,7 +122,7 @@ export default function LogsPage() {
               className="logs-input"
             />
             <Input
-              placeholder="Ara (ref, kullanıcı, detay…)"
+              placeholder="Ara (ref, kullanıcı, işlem…)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="logs-input logs-input-wide"
@@ -163,34 +142,34 @@ export default function LogsPage() {
               <th>Kategori</th>
               <th>İşlem</th>
               <th>Kullanıcı</th>
-              <th>Tutar</th>
-              <th>Detay</th>
               <th>IP</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7}>Yükleniyor...</td>
+                <td colSpan={6}>Yükleniyor...</td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7}>Kayıt yok</td>
+                <td colSpan={6}>Kayıt yok</td>
               </tr>
             ) : (
               items.map((row) => (
                 <tr key={row.id}>
                   <td>{new Date(row.createdAt).toLocaleString("tr-TR")}</td>
-                  <td>{CATEGORY_LABEL[row.category]}</td>
                   <td>
-                    <Badge variant={statusVariant(row.status ?? row.action)}>
-                      {ACTION_LABEL[row.action] ?? row.action}
-                    </Badge>
+                    <Badge variant="gray">{CATEGORY_LABEL[row.category] ?? row.category}</Badge>
                   </td>
+                  <td className="logs-title-cell">{row.title}</td>
                   <td>{row.userId ?? row.actor ?? "—"}</td>
-                  <td>{row.amount ? `₺${Number(row.amount).toLocaleString("tr-TR")}` : "—"}</td>
-                  <td className="logs-detail">{row.detail ?? "—"}</td>
                   <td>{row.ip ?? "—"}</td>
+                  <td>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setDetailItem(row)}>
+                      Görüntüle
+                    </Button>
+                  </td>
                 </tr>
               ))
             )}
@@ -223,6 +202,8 @@ export default function LogsPage() {
           </Button>
         </div>
       ) : null}
+
+      <LogDetailModal open={detailItem !== null} item={detailItem} onClose={() => setDetailItem(null)} />
     </>
   );
 }

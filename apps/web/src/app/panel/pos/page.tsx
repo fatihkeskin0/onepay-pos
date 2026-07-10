@@ -6,6 +6,7 @@ import { API } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { Modal } from "@/components/Modal";
 import { StepUpModal } from "@/components/auth/StepUpModal";
+import { useStepUp } from "@/hooks/useStepUp";
 import { ProxyConfigModal } from "@/components/pos/ProxyConfigModal";
 
 interface PosMethod {
@@ -53,25 +54,14 @@ export default function PosSettingsPage() {
     sort_order: "0",
   });
   const { notify } = useToast();
-
-  const [stepUp, setStepUp] = useState<{
-    title: string;
-    run: (totpCode: string) => Promise<void>;
-  } | null>(null);
-  const [stepUpLoading, setStepUpLoading] = useState(false);
-
-  const executeStepUp = async (totpCode: string) => {
-    if (!stepUp) return;
-    setStepUpLoading(true);
-    try {
-      await stepUp.run(totpCode);
-      setStepUp(null);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Hata", "error");
-    } finally {
-      setStepUpLoading(false);
-    }
-  };
+  const {
+    stepUpOpen,
+    stepUpTitle,
+    stepUpLoading,
+    requestStepUp,
+    closeStepUp,
+    confirmStepUp,
+  } = useStepUp((msg) => notify(msg, "error"));
 
   const load = async () => {
     setLoading(true);
@@ -112,11 +102,13 @@ export default function PosSettingsPage() {
 
   const requestSave = () => {
     if (!editTarget) return;
-    setStepUp({
+    const target = editTarget;
+    requestStepUp({
       title: "POS ayarlarını kaydet",
+      closeParent: () => setEditTarget(null),
       run: async (totpCode) => {
         await API.post("/admin/save_pos_method", {
-          provider: editTarget.provider,
+          provider: target.provider,
           label: editForm.label,
           enabled: editForm.enabled,
           min_amount: Number(editForm.min_amount),
@@ -125,14 +117,13 @@ export default function PosSettingsPage() {
           totp_code: totpCode,
         });
         notify("Kaydedildi", "success");
-        setEditTarget(null);
         load();
       },
     });
   };
 
   const requestToggle = (provider: string) => {
-    setStepUp({
+    requestStepUp({
       title: "POS durumunu değiştir",
       run: async (totpCode) => {
         await API.post("/admin/toggle_pos_method", { provider, totp_code: totpCode });
@@ -148,18 +139,19 @@ export default function PosSettingsPage() {
     proxy_entry_ids: number[];
   }) => {
     if (!proxyTarget) return;
-    setStepUp({
+    const target = proxyTarget;
+    requestStepUp({
       title: "Proxy ayarlarını kaydet",
+      closeParent: () => setProxyTarget(null),
       run: async (totpCode) => {
         await API.post("/admin/save_pos_method", {
-          provider: proxyTarget.provider,
+          provider: target.provider,
           proxy_enabled: config.proxy_enabled,
           proxy_mode: config.proxy_mode,
           proxy_entry_ids: config.proxy_entry_ids,
           totp_code: totpCode,
         });
         notify("Proxy ayarları kaydedildi", "success");
-        setProxyTarget(null);
         load();
       },
     });
@@ -313,11 +305,11 @@ export default function PosSettingsPage() {
       />
 
       <StepUpModal
-        open={stepUp !== null}
-        title={stepUp?.title}
+        open={stepUpOpen}
+        title={stepUpTitle}
         loading={stepUpLoading}
-        onClose={() => setStepUp(null)}
-        onConfirm={executeStepUp}
+        onClose={closeStepUp}
+        onConfirm={confirmStepUp}
       />
     </>
   );

@@ -1,0 +1,135 @@
+.cashiers-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cashiers-page .page-header {
+  margin-bottom: 0;
+}
+
+.cashiers-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+.cashiers-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.cashiers-search {
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.cashiers-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cashiers-table-wrap {
+  overflow-x: auto;
+}
+
+.cashiers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.cashiers-table th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.cashiers-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.cashiers-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+}
+
+.cashiers-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.cashiers-agent-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+}
+
+.cashiers-agent-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.cashiers-agent-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cashiers-status-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cashiers-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+.cashiers-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cashiers-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.cashiers-loading {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+}

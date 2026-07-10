@@ -395,3 +395,22 @@ model TrustedIp {
   @@index([isActive])
   @@map("trusted_ips")
 }
+
+model SystemActivityLog {
+  id            BigInt   @id @default(autoincrement())
+  category      String   @db.VarChar(30)
+  action        String   @db.VarChar(60)
+  title         String   @db.VarChar(200)
+  actorId       Int?     @map("actor_id")
+  actorUsername String?  @map("actor_username") @db.VarChar(60)
+  userId        String?  @map("user_id") @db.VarChar(64)
+  ip            String?  @db.VarChar(45)
+  target        String?  @db.VarChar(120)
+  payload       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([category])
+  @@index([actorId])
+  @@map("system_activity_logs")
+}
